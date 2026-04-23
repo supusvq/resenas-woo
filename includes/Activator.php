@@ -14,7 +14,7 @@ class Activator
         $defaults = [
             'place_id' => '',
             'maps_url' => '',
-            'scraper_service_url' => '',
+            'scraper_service_url' => 'https://scraper.supufactory.es',
             'remote_sync_consent' => 0,
             'review_target_url' => '',
             'theme' => 'dark',

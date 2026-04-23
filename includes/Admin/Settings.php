@@ -141,13 +141,18 @@ class Settings
     public function render_scraper_service_url()
     {
         $settings = $this->get_settings();
+        $value = $settings['scraper_service_url'] ?? 'https://scraper.supufactory.es';
+
+        if (empty($value)) {
+            $value = 'https://scraper.supufactory.es';
+        }
 
         printf(
             '<input type="url" id="mrg_scraper_service_url" name="mrg_settings[scraper_service_url]" value="%s" class="large-text" placeholder="https://tu-servicio.com" />',
-            esc_url($settings['scraper_service_url'] ?? '')
+            esc_url($value)
         );
 
-        echo '<p class="description">' . esc_html__('URL base de tu servicio de importacion. El plugin llamara al endpoint /v1/import-reviews.', 'mis-resenas-de-google') . '</p>';
+        echo '<p class="description">' . esc_html__('URL base de tu servicio de importacion. El plugin llamara al endpoint /v1/import-reviews. Por defecto queda preparada para scraper.supufactory.es.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_remote_sync_consent()
