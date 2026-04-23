@@ -1,0 +1,717 @@
+/* Font: inherited from the active WordPress theme */
+
+/* ═══════════════════════════════════════════════
+   Variables
+═══════════════════════════════════════════════ */
+:root {
+    --mrg-brand: #4285f4;
+    --mrg-star: #fbbc05;
+    --mrg-text: #1f2937;
+    --mrg-muted: #6b7280;
+    --mrg-ring: #e8eaed;
+    --mrg-bg-card: #ffffff;
+    --mrg-shadow: 0 4px 18px rgba(60, 64, 67, 0.10);
+}
+
+/* ═══════════════════════════════════════════════
+   Widget wrapper
+═══════════════════════════════════════════════ */
+.mrg-reviews-widget {
+    font-family: inherit;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 28px 0;
+    background: transparent;
+    color: var(--mrg-text);
+}
+
+/* ═══════════════════════════════════════════════
+   Header
+═══════════════════════════════════════════════ */
+.mrg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 0 16px;
+    flex-wrap: wrap;
+}
+
+.mrg-header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.mrg-google-logo-main {
+    height: 24px;
+    width: auto;
+}
+
+.mrg-overall-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.mrg-excellent-text {
+    font-weight: 700;
+    font-size: 17px;
+}
+
+.mrg-stars-header {
+    display: flex;
+    gap: 2px;
+    color: var(--mrg-star);
+    font-size: 17px;
+}
+
+.mrg-stats-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mrg-muted);
+}
+
+.mrg-header-right .mrg-btn-write {
+    display: inline-block;
+    background: #fff;
+    color: var(--mrg-text) !important;
+    border: 1px solid #dadce0;
+    padding: 9px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    text-decoration: none;
+    transition: background .2s, box-shadow .2s;
+}
+
+.mrg-header-right .mrg-btn-write:hover {
+    background: #f8f9fa;
+    box-shadow: 0 1px 4px rgba(60, 64, 67, .25);
+}
+
+/* ═══════════════════════════════════════════════
+   Carousel container
+═══════════════════════════════════════════════ */
+.mrg-carousel-container {
+    padding: 0 16px;
+}
+
+.mrg-carousel-wrapper {
+    overflow: hidden;
+    /* clips the scrolling track */
+}
+
+/* ── Elementos compartidos para ambos modos ── */
+.mrg-carousel-wrapper {
+    overflow: hidden;
+    /* clips the scrolling track */
+}
+
+/* ── Modo Manual ── */
+.mrg-carousel-container {
+    position: relative;
+}
+
+/* ── Restauración del Track ── */
+.mrg-reviews-track {
+    display: flex;
+    gap: 16px;
+    padding: 6px 0 12px;
+    will-change: transform;
+    /* GPU layer for smooth animation (Auto Mode) */
+}
+
+.mrg-carousel-wrapper.mrg-manual-mode {
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+}
+
+.mrg-carousel-wrapper.mrg-manual-mode::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari */
+}
+
+.mrg-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent !important;
+    border: none !important;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: none !important;
+    outline: none !important;
+    z-index: 10;
+    color: var(--mrg-text);
+    transition: all 0.2s ease;
+    padding: 0 !important;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.mrg-nav-btn svg {
+    width: 56px;
+    height: 56px;
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+    pointer-events: none;
+}
+
+.mrg-nav-btn:hover {
+    color: var(--mrg-brand) !important;
+    background: transparent !important;
+    transform: translateY(-50%) scale(1.1);
+    outline: none !important;
+}
+
+.mrg-nav-btn:focus {
+    outline: none !important;
+    background: transparent !important;
+}
+
+.mrg-nav-btn:active {
+    transform: translateY(-50%) scale(0.9);
+}
+
+.mrg-nav-prev {
+    left: -15px;
+}
+
+.mrg-nav-next {
+    right: -15px;
+}
+
+/* Ajustes de track para modo manual */
+.mrg-manual-mode .mrg-reviews-track {
+    /* En modo manual no queremos animaciones ni resets, 
+      simplemente es un flex container que hace scroll. */
+    will-change: auto;
+    width: max-content;
+}
+
+/* ═══════════════════════════════════════════════
+   Card — horizontal layout
+═══════════════════════════════════════════════ */
+.mrg-review-card {
+    scroll-snap-align: start;
+    flex: 0 0 400px;
+    background: var(--mrg-bg-card);
+    border: 1px solid var(--mrg-ring);
+    border-radius: 14px;
+    padding: 0;
+    display: flex;
+    flex-direction: row;
+    min-height: 150px;
+    overflow: hidden;
+    transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+}
+
+.mrg-review-card:hover {
+    box-shadow: var(--mrg-shadow);
+    transform: translateY(-3px);
+    border-color: #c5cae9;
+}
+
+/* ── Design: Vertical ── */
+.mrg-design-vertical .mrg-review-card {
+    flex-direction: column;
+    min-height: auto;
+}
+
+.mrg-design-vertical .mrg-card-left {
+    flex-direction: row;
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #f1f3f4;
+    padding: 14px 18px;
+    justify-content: flex-start;
+    gap: 12px;
+    text-align: left;
+}
+
+.mrg-design-vertical .mrg-author-info {
+    align-items: flex-start;
+}
+
+.mrg-design-vertical .mrg-google-icon-small {
+    margin-left: auto;
+}
+
+/* ── Design: Square ── */
+.mrg-design-square .mrg-review-card {
+    flex: 0 0 100%;
+    /* Una sola tarjeta a la vez */
+    flex-direction: column;
+    min-height: 280px;
+    aspect-ratio: 1 / 1;
+    max-width: 500px;
+    /* Evitar que sea gigante en pantallas muy anchas */
+    margin: 0 auto;
+}
+
+.mrg-design-square .mrg-carousel-wrapper {
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.mrg-design-square .mrg-card-left {
+    flex-direction: row;
+    min-width: unset;
+    max-width: unset;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #f1f3f4;
+    padding: 20px;
+    justify-content: flex-start;
+    gap: 15px;
+    text-align: left;
+}
+
+.mrg-design-square .mrg-card-body {
+    padding: 25px;
+    justify-content: center;
+}
+
+.mrg-design-square .mrg-google-icon-small {
+    margin-left: auto;
+}
+
+.mrg-design-square .mrg-review-content {
+    -webkit-line-clamp: 8;
+    /* Más espacio para texto */
+    font-size: 15px;
+}
+
+/* Left panel — avatar + author info */
+.mrg-design-spotlight {
+    padding: 12px 0;
+}
+
+.mrg-spotlight-shell {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 28px;
+    align-items: center;
+}
+
+.mrg-spotlight-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.mrg-spotlight-kicker {
+    font-size: 23px;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: .01em;
+}
+
+.mrg-spotlight-stars {
+    color: var(--mrg-star);
+    font-size: 30px;
+    line-height: .95;
+    letter-spacing: 1px;
+}
+
+.mrg-spotlight-count {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.35;
+    color: #111827;
+}
+
+.mrg-spotlight-count strong {
+    font-weight: 800;
+}
+
+.mrg-spotlight-brand-link {
+    display: inline-flex;
+    align-items: center;
+}
+
+.mrg-spotlight-logo {
+    height: 56px;
+}
+
+.mrg-design-spotlight .mrg-carousel-container {
+    padding: 0;
+}
+
+.mrg-design-spotlight .mrg-reviews-track {
+    gap: 12px;
+    padding: 10px 22px 10px 0;
+}
+
+.mrg-design-spotlight .mrg-review-card {
+    flex: 0 0 252px;
+    min-height: 244px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px 18px 18px;
+    border-radius: 16px;
+    border: 1px solid #d6d9de;
+    box-shadow: none;
+}
+
+.mrg-design-spotlight .mrg-review-card:hover {
+    transform: translateY(-2px);
+    border-color: #c3c8d0;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, .08);
+}
+
+.mrg-spotlight-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.mrg-spotlight-card-author {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.mrg-spotlight-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.mrg-design-spotlight .mrg-name {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mrg-design-spotlight .mrg-date {
+    font-size: 12px;
+}
+
+.mrg-design-spotlight .mrg-google-icon-small {
+    width: 21px;
+    height: 21px;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.mrg-design-spotlight .mrg-card-rating {
+    margin-bottom: 0;
+    font-size: 16px;
+}
+
+.mrg-design-spotlight .mrg-review-content {
+    flex: 1;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #111827;
+    -webkit-line-clamp: 4;
+}
+
+.mrg-read-more-spotlight {
+    margin-top: auto;
+    color: #9ca3af;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.mrg-design-spotlight .mrg-nav-btn {
+    width: 46px;
+    height: 46px;
+    background: #fff !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 999px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .08) !important;
+}
+
+.mrg-design-spotlight .mrg-nav-btn svg {
+    width: 28px;
+    height: 28px;
+    filter: none;
+}
+
+.mrg-design-spotlight .mrg-nav-prev {
+    left: -14px;
+}
+
+.mrg-design-spotlight .mrg-nav-next {
+    right: -2px;
+}
+
+.mrg-card-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 20px 16px;
+    min-width: 120px;
+    max-width: 120px;
+    border-right: 1px solid #f1f3f4;
+    text-align: center;
+}
+
+/* Right panel — stars + review text */
+.mrg-card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: 18px 18px;
+    min-width: 0;
+}
+
+/* ── Author photo / avatar ── */
+.mrg-author-photo {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+
+.mrg-author-photo-fallback {
+    background: #e8f0fe;
+    color: #4285f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 20px;
+}
+
+/* ── Author text info ── */
+.mrg-author-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.mrg-name {
+    font-weight: 600;
+    font-size: 12.5px;
+    line-height: 1.3;
+    word-break: break-word;
+    color: var(--mrg-text);
+}
+
+.mrg-date {
+    font-size: 11px;
+    color: var(--mrg-muted);
+}
+
+/* ── Google icon (bottom of left panel) ── */
+.mrg-google-icon-small {
+    width: 16px;
+    height: 16px;
+    opacity: .8;
+}
+
+/* ═══════════════════════════════════════════════
+   Stars + verify badge
+═══════════════════════════════════════════════ */
+.mrg-card-rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    color: var(--mrg-star);
+    font-size: 13px;
+}
+
+.mrg-verify-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    background: #1e8e3e;
+    color: #fff;
+    border-radius: 50%;
+    font-size: 9px;
+}
+
+/* ═══════════════════════════════════════════════
+   Review text + read more
+═══════════════════════════════════════════════ */
+.mrg-review-content {
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: #374151;
+    flex-grow: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    margin: 0;
+    opacity: .9;
+}
+
+.mrg-read-more {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mrg-brand);
+    cursor: pointer;
+    align-self: flex-start;
+    letter-spacing: .01em;
+}
+
+
+/* ═══════════════════════════════════════════════
+   No reviews message
+═══════════════════════════════════════════════ */
+.mrg-no-reviews {
+    font-size: 14px;
+    color: var(--mrg-muted);
+    padding: 16px;
+}
+
+/* ═══════════════════════════════════════════════
+   Responsive — mobile stacking
+═══════════════════════════════════════════════ */
+@media (max-width: 600px) {
+    .mrg-spotlight-shell {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .mrg-spotlight-summary {
+        align-items: center;
+        text-align: center;
+        padding: 0 12px;
+    }
+
+    .mrg-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .mrg-header-right {
+        width: 100%;
+    }
+
+    .mrg-btn-write {
+        width: 100%;
+        text-align: center;
+    }
+
+    .mrg-carousel-container {
+        padding: 0 20px;
+        /* Give some space for arrows on mobile */
+    }
+
+    .mrg-nav-btn {
+        width: 40px;
+        height: 40px;
+    }
+
+    .mrg-nav-btn svg {
+        width: 36px;
+        height: 36px;
+    }
+
+    .mrg-nav-prev {
+        left: -5px;
+    }
+
+    .mrg-nav-next {
+        right: -5px;
+    }
+
+    /* Stack card to column on small screens */
+    .mrg-review-card {
+        flex: 0 0 80vw;
+        /* Use percentage of viewport for better mobile fitting */
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .mrg-design-spotlight .mrg-review-card {
+        flex: 0 0 84vw;
+        min-height: 220px;
+        padding: 16px;
+    }
+
+    .mrg-card-left {
+        flex-direction: row;
+        min-width: unset;
+        max-width: unset;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #f1f3f4;
+        padding: 12px 14px;
+        justify-content: flex-start;
+        gap: 12px;
+        text-align: left;
+    }
+
+    .mrg-author-info {
+        align-items: flex-start;
+    }
+
+    .mrg-design-spotlight .mrg-nav-prev {
+        left: -6px;
+    }
+
+    .mrg-design-spotlight .mrg-nav-next {
+        right: -6px;
+    }
+}
+
+/* Tablet refinements */
+@media (min-width: 601px) and (max-width: 1024px) {
+    .mrg-spotlight-shell {
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .mrg-nav-btn {
+        width: 44px;
+        height: 44px;
+    }
+
+    .mrg-nav-btn svg {
+        width: 40px;
+        height: 40px;
+    }
+
+    .mrg-nav-prev {
+        left: -10px;
+    }
+
+    .mrg-nav-next {
+        right: -10px;
+    }
+}

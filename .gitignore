@@ -1,0 +1,19 @@
+# WordPress plugin release artifacts
+dist/*.zip
+dist/.release-tmp/
+.release-tmp/
+
+# Python backend local environment and caches
+backend/.venv/
+backend/__pycache__/
+backend/**/*.pyc
+backend/*.pyc
+
+# Generic caches
+__pycache__/
+*.pyc
+*.pyo
+
+# OS and editor files
+.DS_Store
+Thumbs.db
