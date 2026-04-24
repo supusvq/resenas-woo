@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 class ImportRequest(BaseModel):
     maps_url: HttpUrl
-    max_reviews: int = Field(default=10, ge=1, le=10)
+    max_reviews: int = Field(default=6, ge=1, le=6)
     language: str = Field(default="es", min_length=2, max_length=10)
     site_url: Optional[HttpUrl] = None
 

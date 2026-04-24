@@ -302,7 +302,7 @@ class ReviewImportService:
             "Muy satisfechos con el pedido y la comunicacion.",
         ]
 
-        review_count = min(max_reviews, 8)
+        review_count = min(max_reviews, 6)
         reviews: List[ReviewItem] = []
 
         for index in range(review_count):

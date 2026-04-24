@@ -15,7 +15,7 @@ class Renderer
         $settings = get_option('mrg_settings', []);
         $repo = new ReviewRepository();
         $theme = !empty($atts['theme']) ? sanitize_text_field($atts['theme']) : ($settings['theme'] ?? 'dark');
-        $limit = 10;
+        $limit = 6;
         $stars = !empty($atts['stars']) ? sanitize_text_field($atts['stars']) : ($settings['default_stars'] ?? 'all');
         $design = !empty($atts['design']) ? sanitize_text_field($atts['design']) : 'horizontal';
 

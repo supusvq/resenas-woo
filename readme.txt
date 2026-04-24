@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.10.0
+Stable tag: 2.10.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,14 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.10.6 =
+* Fixed the review pipeline to keep and display only the 6 most recent reviews.
+* Updated the import limit so the backend and frontend stay aligned on 6 reviews.
+
+= 2.10.5 =
+* Prepared the plugin to use the fixed scraper service URL at scraper.supufactory.es.
+* Bumped the plugin version for a clean upload and detection of the latest release.
 
 = 2.10.0 =
 * Replaced the old Google Places flow with Google Maps URL import through an external service.

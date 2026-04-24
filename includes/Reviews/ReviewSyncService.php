@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
 
 class ReviewSyncService
 {
-    private const REMOTE_REVIEW_LIMIT = 10;
+    private const REMOTE_REVIEW_LIMIT = 6;
 
     public function sync()
     {

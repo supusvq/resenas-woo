@@ -84,7 +84,7 @@ class ReviewRepository
         return $wpdb->delete($this->table, ['id' => (int) $id]);
     }
 
-    public function get_reviews($limit = 10, $stars = 'all', $only_active = false)
+    public function get_reviews($limit = 6, $stars = 'all', $only_active = false)
     {
         global $wpdb;
         $limit = max(1, min(50, absint($limit)));
@@ -108,7 +108,7 @@ class ReviewRepository
         return $results ?: [];
     }
 
-    public function prune_place_reviews($place_id, $keep = 10)
+    public function prune_place_reviews($place_id, $keep = 6)
     {
         global $wpdb;
 

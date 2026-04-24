@@ -99,7 +99,7 @@ class Settings
             'review_target_url' => esc_url_raw(wp_unslash((string) $use_raw('review_target_url'))),
             'theme' => in_array($use_text('theme', 'dark'), ['dark', 'light'], true) ? $use_text('theme', 'dark') : 'dark',
             'default_stars' => $use_text('default_stars', 'all'),
-            'reviews_limit' => 10,
+            'reviews_limit' => 6,
             'slider_mode' => in_array($use_text('slider_mode', 'auto'), ['auto', 'manual'], true) ? $use_text('slider_mode', 'auto') : 'auto',
             'slider_speed' => max(0.1, min(5.0, round((float) $use_raw('slider_speed', 0.6), 1))),
             'last_sync' => $use_text('last_sync'),
@@ -224,8 +224,8 @@ class Settings
 
     public function render_reviews_limit()
     {
-        echo '<input type="number" min="10" max="10" name="mrg_settings[reviews_limit]" value="10" readonly />';
-        echo '<p class="description">' . esc_html__('El plugin muestra y conserva siempre las 10 reseñas más recientes importadas.', 'mis-resenas-de-google') . '</p>';
+        echo '<input type="number" min="6" max="6" name="mrg_settings[reviews_limit]" value="6" readonly />';
+        echo '<p class="description">' . esc_html__('El plugin muestra y conserva siempre las 6 reseñas más recientes importadas.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_slider_mode()
