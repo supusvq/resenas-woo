@@ -39,9 +39,9 @@ class ReviewImportService:
         try:
             payload = self._request_json(
                 "GET",
-                f"{upstream_url}/health",
+                upstream_url,
                 timeout=10,
-                fallback_message="No se pudo consultar /health del scraper upstream.",
+                fallback_message="No se pudo consultar la raiz del scraper upstream.",
             )
             return {
                 "ok": True,
