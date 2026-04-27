@@ -1,6 +1,7 @@
 import os
 import time
 from typing import Any, Dict, List
+from urllib.parse import quote
 
 from providers.base import BaseReviewProvider
 from schemas import ImportRequest, ImportResponse, ReviewItem
@@ -56,7 +57,7 @@ class ApifyProvider(BaseReviewProvider):
     def _start_run(self, payload: ImportRequest) -> Dict[str, Any]:
         return self.request_json(
             "POST",
-            f"{self.api_base}/acts/{self.actor_id}/runs",
+            f"{self.api_base}/acts/{self._actor_path()}/runs",
             params={"token": self.token},
             json={
                 "startUrls": [{"url": str(payload.maps_url)}],
@@ -128,3 +129,8 @@ class ApifyProvider(BaseReviewProvider):
         if not self.actor_id:
             missing.append("MRG_APIFY_ACTOR_ID")
         return missing
+
+    def _actor_path(self) -> str:
+        # Apify API expects named actors as "username~actor-name".
+        # The console shows them as "username/actor-name", so accept both.
+        return quote(self.actor_id.replace("/", "~"), safe="")
