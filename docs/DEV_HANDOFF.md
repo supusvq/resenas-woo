@@ -1,60 +1,123 @@
 # Handoff tecnico
 
-## Estado actual
+## Decision actual
 
-- El plugin de WordPress ya esta separado del scraper real.
-- El plugin llama a `http://scraper.supufactory.es`.
+El scraper Selenium ha quedado como fallback legado. La estrategia buena ahora es:
+
+1. Usar Google Business Profile API cuando tengamos acceso a la ficha.
+2. Preparar Apify como alternativa controlada si no hay acceso oficial.
+3. Mantener Selenium solo para pruebas o emergencia.
+
+## Estado del plugin
+
+- El plugin WordPress sigue llamando a `http://scraper.supufactory.es`.
 - Nginx en el VPS reenvia a `127.0.0.1:8000`.
 - El backend del plugin corre como `google-reviews.service`.
-- El backend esta en modo `upstream`.
-- El scraper real corre en `127.0.0.1:8001`.
+- El endpoint estable sigue siendo `POST /v1/import-reviews`.
+- El plugin guarda y muestra como maximo 6 reseñas.
 
-## Repos y rutas
+## Backend nuevo
 
-- Plugin: `C:\Users\Equipo\Desktop\MODELOS\APPS\PLUGINS WORDPRESS\Reseñas Woo\resenas_woo`
-- Backend del plugin en VPS: `/opt/supu/apps/resenas-woo`
-- Scraper real en local: `C:\Users\Equipo\Desktop\google-reviews-scraper-pro`
-- Scraper real en VPS: `/opt/supu/services/google-reviews-scraper`
+Ruta local:
 
-## Configuracion importante
+```text
+C:\Users\Equipo\Desktop\MODELOS\APPS\PLUGINS WORDPRESS\Reseñas Woo\resenas_woo\backend
+```
 
-- `MRG_IMPORT_MODE=upstream`
-- `MRG_UPSTREAM_API_URL=http://127.0.0.1:8001`
-- Limite del plugin: `6` reseñas maximo
+Ruta VPS:
 
-## Lo que ya funciona
+```text
+/opt/supu/apps/resenas-woo/backend
+```
 
-- Consentimiento de Google.
-- Navegacion a la ficha de negocio.
-- URL canonica de `/reviews`.
-- Servicio del backend en `8000`.
-- Servicio del scraper en `8001`.
+Proveedor activo por variable:
 
-## Bloqueo actual
+```text
+MRG_REVIEW_PROVIDER=google_business_profile
+```
 
-- El scraper ya llega a la ficha y a la URL de reseñas.
-- El fallo esta en la deteccion estable del listado de reseñas.
-- En los logs aparecen casos como:
-  - `Direct reviews URL loaded, but no review cards were visible yet`
-  - `Could not find reviews pane with any selector`
+Valores validos:
 
-## Siguiente paso util
+- `google_business_profile`
+- `apify`
+- `selenium_legacy`
+- `demo`
 
-- Revisar el ultimo HTML de debug generado en el VPS.
-- Buscar el selector real del listado de reseñas en la pagina cargada.
-- Ajustar `modules/scraper.py` del repo `google-reviews-scraper-pro` en funcion de ese HTML.
+## Google Business Profile
 
-## Archivos clave
+Variables necesarias:
 
-- `modules/scraper.py` en `google-reviews-scraper-pro`
-- `backend/service.py` en `resenas-woo`
-- `backend/schemas.py` en `resenas-woo`
-- `includes/Reviews/ReviewSyncService.php`
-- `includes/Reviews/ReviewRepository.php`
+```text
+MRG_GBP_ACCESS_TOKEN=
+MRG_GBP_REFRESH_TOKEN=
+MRG_GBP_CLIENT_ID=
+MRG_GBP_CLIENT_SECRET=
+MRG_GBP_ACCOUNT_ID=
+MRG_GBP_LOCATION_ID=
+MRG_GBP_PLACE_NAME=
+```
+
+Pendiente real:
+
+- Crear/validar proyecto Google Cloud.
+- Activar Google Business Profile API.
+- Conseguir OAuth con permisos sobre la ficha.
+- Guardar refresh token OAuth en el VPS para renovar access tokens.
+- Guardar token de forma segura en el VPS, no en Git.
+
+## Apify
+
+Variables preparadas:
+
+```text
+MRG_APIFY_TOKEN=
+MRG_APIFY_ACTOR_ID=
+MRG_APIFY_TIMEOUT=180
+```
+
+Pendiente:
+
+- Elegir actor concreto.
+- Confirmar formato de salida.
+- Ajustar mapeo si el actor usa nombres de campos diferentes.
+
+## Selenium legado
+
+Ruta local:
+
+```text
+C:\Users\Equipo\Desktop\google-reviews-scraper-pro
+```
+
+Ruta VPS:
+
+```text
+/opt/supu/services/google-reviews-scraper
+```
+
+Variables:
+
+```text
+MRG_REVIEW_PROVIDER=selenium_legacy
+MRG_UPSTREAM_API_URL=http://127.0.0.1:8001
+```
+
+Problema conocido:
+
+- Google cambia estructura/consentimiento.
+- La deteccion de tarjetas de reseñas no es estable.
+- Por eso ya no debe ser el camino principal.
 
 ## Comandos utiles
 
-- `sudo systemctl status google-reviews`
-- `curl http://127.0.0.1:8000/health/upstream`
-- `curl http://127.0.0.1:8001/`
-- Revisar `logs/debug/` en el VPS para el ultimo HTML y screenshot de error
+```bash
+sudo systemctl status google-reviews --no-pager
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/health/upstream
+```
+
+Si se mantiene Selenium temporalmente:
+
+```bash
+curl http://127.0.0.1:8001/
+```

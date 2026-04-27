@@ -1,102 +1,109 @@
-# Backend minimo para Reseñas Woo
+# Backend de importacion de reseñas
 
-Este backend expone el endpoint que espera el plugin:
+Este servicio expone el endpoint que usa el plugin WordPress:
 
-- `POST /v1/import-reviews`
+```text
+POST /v1/import-reviews
+```
 
-Tiene dos modos:
+El objetivo es dejar Selenium como fallback legado y usar proveedores mas estables:
 
-- `demo`: devuelve reseñas simuladas para probar el plugin de punta a punta.
-- `upstream`: delega en una instancia del scraper externo y normaliza la respuesta al contrato del plugin.
+- `google_business_profile`: API oficial de Google Business Profile. Es el camino recomendado si tenemos acceso a la ficha del negocio.
+- `apify`: proveedor externo preparado para una siguiente fase.
+- `selenium_legacy`: scraper antiguo en `127.0.0.1:8001`. Solo fallback.
+- `demo`: reseñas falsas para probar WordPress sin servicios externos.
 
-## 1. Crear entorno virtual
+## Arranque local
 
 ```powershell
 cd backend
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-```
-
-## 2. Arranque rapido en modo demo
-
-```powershell
-$env:MRG_IMPORT_MODE="demo"
+$env:MRG_REVIEW_PROVIDER="demo"
 uvicorn app:app --host 127.0.0.1 --port 8010 --reload
 ```
 
-Luego en el plugin usa como URL del servicio:
+## Produccion recomendada
+
+```bash
+export MRG_REVIEW_PROVIDER=google_business_profile
+export MRG_GBP_REFRESH_TOKEN="..."
+export MRG_GBP_CLIENT_ID="..."
+export MRG_GBP_CLIENT_SECRET="..."
+export MRG_GBP_ACCOUNT_ID="..."
+export MRG_GBP_LOCATION_ID="..."
+export MRG_GBP_PLACE_NAME="Nombre del negocio"
+uvicorn app:app --host 127.0.0.1 --port 8000
+```
+
+## Google Business Profile
+
+Este modo llama a:
 
 ```text
-http://127.0.0.1:8010
+GET /accounts/{account_id}/locations/{location_id}/reviews
 ```
 
-## 3. Modo upstream con scraper real
+Variables necesarias:
 
-Debes tener una API del scraper funcionando aparte, por ejemplo en:
+- `MRG_GBP_ACCESS_TOKEN`
+- `MRG_GBP_REFRESH_TOKEN`
+- `MRG_GBP_CLIENT_ID`
+- `MRG_GBP_CLIENT_SECRET`
+- `MRG_GBP_ACCOUNT_ID`
+- `MRG_GBP_LOCATION_ID`
+- `MRG_GBP_PLACE_NAME` opcional
 
-```text
-http://127.0.0.1:8001
+Para pruebas se puede usar `MRG_GBP_ACCESS_TOKEN`, pero en produccion es mejor usar refresh token OAuth porque el access token caduca.
+
+Importante: la API oficial solo sirve para fichas donde tengamos permiso en Google Business Profile. No sirve para rascar reseñas de cualquier negocio publico sin autorizacion.
+
+## Apify
+
+Preparado para la siguiente fase:
+
+```bash
+export MRG_REVIEW_PROVIDER=apify
+export MRG_APIFY_TOKEN="..."
+export MRG_APIFY_ACTOR_ID="..."
 ```
 
-Variables:
+El backend arranca el actor, espera el resultado y normaliza campos comunes. Cuando elijamos actor concreto, ajustaremos el payload y el mapeo si hace falta.
 
-```powershell
-$env:MRG_IMPORT_MODE="upstream"
-$env:MRG_UPSTREAM_API_URL="http://127.0.0.1:8001"
-$env:MRG_UPSTREAM_API_KEY=""
-$env:MRG_UPSTREAM_TIMEOUT="180"
-uvicorn app:app --host 127.0.0.1 --port 8010 --reload
+## Selenium legado
+
+Solo si queremos mantener el scraper antiguo:
+
+```bash
+export MRG_REVIEW_PROVIDER=selenium_legacy
+export MRG_UPSTREAM_API_URL=http://127.0.0.1:8001
+export MRG_UPSTREAM_TIMEOUT=180
 ```
 
-## 4. Healthcheck
+## Healthchecks
 
 ```text
 GET /health
+GET /health/upstream
 ```
 
-Respuesta:
+`/health/upstream` se mantiene por compatibilidad, pero ahora informa del proveedor activo.
+
+## Contrato de respuesta
+
+El plugin espera siempre JSON con:
 
 ```json
 {
-  "ok": true,
-  "service": "mrg-import-service"
+  "success": true,
+  "place_id": "gbp_xxx",
+  "place_name": "Negocio",
+  "rating": 4.9,
+  "user_ratings_total": 120,
+  "review_target_url": "https://www.google.com/maps/place/...",
+  "reviews": []
 }
 ```
 
-## 5. Endpoint principal
-
-```text
-POST /v1/import-reviews
-```
-
-Ejemplo:
-
-```json
-{
-  "maps_url": "https://www.google.com/maps/place/...",
-  "max_reviews": 200,
-  "language": "es",
-  "site_url": "https://midominio.com/"
-}
-```
-
-## 6. Notas de integracion
-
-- El plugin ya esta preparado para este endpoint.
-- En `demo` puedes validar el flujo sin scraper real.
-- En `upstream` este backend:
-  - crea el job en `/scrape`
-  - consulta `/jobs/{job_id}`
-  - busca el place correspondiente
-  - descarga las reseñas y las normaliza
-
-## 7. Siguiente paso recomendado
-
-Cuando quieras, podemos adaptar este backend al repo `google-reviews-scraper-pro` de forma mas estricta y dejarlo listo para produccion con:
-
-- timeouts mas finos
-- logs estructurados
-- autenticacion
-- rate limiting
-- dockerizacion
+El backend limita la importacion a 6 reseñas como maximo.

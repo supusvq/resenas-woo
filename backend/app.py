@@ -9,17 +9,15 @@ log = logging.getLogger("mrg_import_service")
 
 app = FastAPI(
     title="MRG Import Service",
-    version="0.1.0",
-    description="Backend minimo para importar reseñas de Google Maps hacia el plugin Reseñas Woo.",
+    version="0.2.0",
+    description="Backend para importar reseñas de Google hacia el plugin Reseñas Woo.",
 )
 
 
 @app.get("/health")
 def healthcheck():
-    return {
-        "ok": True,
-        "service": "mrg-import-service",
-    }
+    service = ReviewImportService()
+    return service.health()
 
 
 @app.get("/health/upstream")
