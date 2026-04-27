@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.11.6
+Stable tag: 2.11.7
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,9 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.11.7 =
+* Added a defensive privacy module check to avoid fatal errors on incomplete uploads.
 
 = 2.11.6 =
 * Centered the spotlight summary and reduced the Google logo size.
