@@ -3,7 +3,7 @@
  * Plugin Name: Reseñas Woo
  * Plugin URI: https://www.supudigital.es
  * Description: Visualiza reseñas de Google almacenadas localmente y automatiza solicitudes de reseña post-compra en WooCommerce.
- * Version: 2.11.0
+ * Version: 2.11.1
  * Author: Juan Gallardo
  * Author URI: https://www.supudigital.es
  * Text Domain: mis-resenas-de-google
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MRG_VERSION', '2.11.0');
+define('MRG_VERSION', '2.11.1');
 define('MRG_FILE', __FILE__);
 define('MRG_PATH', plugin_dir_path(__FILE__));
 define('MRG_URL', plugin_dir_url(__FILE__));

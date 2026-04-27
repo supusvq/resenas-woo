@@ -431,6 +431,7 @@
     line-height: 1.5;
     color: #111827;
     -webkit-line-clamp: 4;
+    min-height: 0;
 }
 
 .mrg-read-more-spotlight {

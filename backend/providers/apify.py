@@ -38,8 +38,9 @@ class ApifyProvider(BaseReviewProvider):
 
         self._wait_for_run(run_id)
         items = self._fetch_dataset_items(run_id)
-        reviews = [self._normalize_review(item, payload) for item in items[: self.limit_reviews(payload)]]
-        reviews = [review for review in reviews if review.review_text or review.author_name]
+        normalized_reviews = [self._normalize_review(item, payload) for item in items]
+        reviews_with_text = [review for review in normalized_reviews if review.review_text.strip()]
+        reviews = (reviews_with_text or normalized_reviews)[: self.limit_reviews(payload)]
 
         if not reviews:
             raise RuntimeError("Apify no devolvio reseñas con un formato compatible.")
@@ -61,7 +62,10 @@ class ApifyProvider(BaseReviewProvider):
             params={"token": self.token},
             json={
                 "startUrls": [{"url": str(payload.maps_url)}],
-                "maxReviews": self.limit_reviews(payload),
+                "maxReviews": max(20, self.limit_reviews(payload) * 4),
+                "reviewsSort": "newest",
+                "reviewsOrigin": "google",
+                "personalData": True,
                 "language": payload.language,
             },
             timeout=30,
