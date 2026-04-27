@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var mode = widget.getAttribute('data-mode') || 'auto';
 
     if (mode === 'manual') {
+      track.style.transform = 'none';
       // ── MODO MANUAL ──
       var prevBtn = widget.querySelector('.mrg-nav-prev');
       var nextBtn = widget.querySelector('.mrg-nav-next');

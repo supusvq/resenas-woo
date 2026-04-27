@@ -14,9 +14,11 @@ class Renderer
     {
         $settings = get_option('mrg_settings', []);
         $repo = new ReviewRepository();
-        $theme = !empty($atts['theme']) ? sanitize_text_field($atts['theme']) : ($settings['theme'] ?? 'dark');
+        $theme = !empty($atts['theme']) ? sanitize_text_field($atts['theme']) : ($settings['theme'] ?? 'light');
+        $theme = in_array($theme, ['dark', 'light'], true) ? $theme : 'light';
         $limit = 6;
         $stars = !empty($atts['stars']) ? sanitize_text_field($atts['stars']) : ($settings['default_stars'] ?? 'all');
+        $stars = in_array($stars, ['all', '5', '4-5', '3-5', '4'], true) ? $stars : 'all';
         $design = !empty($atts['design']) ? sanitize_text_field($atts['design']) : 'horizontal';
 
         $transient_key = 'mrg_reviews_cache_' . md5(json_encode(['limit' => $limit, 'stars' => $stars]));
@@ -24,20 +26,19 @@ class Renderer
 
         if (false === $reviews) {
             $reviews = $repo->get_reviews($limit, $stars, true);
-
-            $cache_duration = absint($settings['cache_duration'] ?? 24);
+            $cache_duration = 1;
             set_transient($transient_key, $reviews, $cache_duration * HOUR_IN_SECONDS);
             error_log("[MRG] Reviews cached for $cache_duration hours");
         } else {
             error_log('[MRG] Reviews loaded from transient');
         }
 
-        $avg = !empty($settings['google_rating']) ? (float) $settings['google_rating'] : $repo->average_rating();
+        $avg = $repo->average_rating();
         $count = !empty($settings['google_reviews_total']) ? absint($settings['google_reviews_total']) : $repo->count_all();
         $write_url = Helpers::write_review_url($settings['place_id'] ?? '');
-        $speed = (float) ($settings['slider_speed'] ?? 0.6);
-        $slider_mode = $settings['slider_mode'] ?? 'auto';
-        $header_stars = !empty($settings['google_stars_header']) ? absint($settings['google_stars_header']) : 5;
+        $speed = 0.6;
+        $slider_mode = in_array(($settings['slider_mode'] ?? 'auto'), ['auto', 'manual'], true) ? $settings['slider_mode'] : 'auto';
+        $header_stars = max(1, min(5, absint($settings['google_stars_header'] ?? 5)));
         $is_spotlight = ('spotlight' === $design);
 
         ob_start();

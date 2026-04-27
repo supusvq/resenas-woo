@@ -56,18 +56,12 @@ class Settings
 
         add_settings_field('maps_url', __('URL de Google Maps', 'mis-resenas-de-google'), [$this, 'render_maps_url'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('scraper_service_url', __('URL del servicio de importacion', 'mis-resenas-de-google'), [$this, 'render_scraper_service_url'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('service_site_token', __('Token del sitio', 'mis-resenas-de-google'), [$this, 'render_service_site_token'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('google_location', __('Ficha conectada', 'mis-resenas-de-google'), [$this, 'render_google_location'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('remote_sync_consent', __('Consentimiento del servicio externo', 'mis-resenas-de-google'), [$this, 'render_remote_sync_consent'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('theme', __('Tema', 'mis-resenas-de-google'), [$this, 'render_theme'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('default_stars', __('Filtro de estrellas por defecto', 'mis-resenas-de-google'), [$this, 'render_default_stars'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('reviews_limit', __('Numero de reseñas', 'mis-resenas-de-google'), [$this, 'render_reviews_limit'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('slider_mode', __('Modo de slider', 'mis-resenas-de-google'), [$this, 'render_slider_mode'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('slider_speed', __('Velocidad del slider (modo automatico)', 'mis-resenas-de-google'), [$this, 'render_slider_speed'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('google_rating', __('Puntuacion media', 'mis-resenas-de-google'), [$this, 'render_google_rating'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('google_stars_header', __('Estrellas en cabecera', 'mis-resenas-de-google'), [$this, 'render_google_stars_header'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('google_reviews_total', __('Total de reseñas', 'mis-resenas-de-google'), [$this, 'render_google_reviews_total'], 'mrg-settings', 'mrg_main_section');
-        add_settings_field('cache_duration', __('Duracion de cache (horas)', 'mis-resenas-de-google'), [$this, 'render_cache_duration'], 'mrg-settings', 'mrg_main_section');
+        add_settings_field('google_stars_header', __('Estrellas mostradas en cabecera', 'mis-resenas-de-google'), [$this, 'render_google_stars_header'], 'mrg-settings', 'mrg_main_section');
+        add_settings_field('google_reviews_total', __('Total mostrado en cabecera', 'mis-resenas-de-google'), [$this, 'render_google_reviews_total'], 'mrg-settings', 'mrg_main_section');
 
         add_settings_section(
             'mrg_sync_section',
@@ -97,7 +91,7 @@ class Settings
             return sanitize_text_field(wp_unslash((string) $use_raw($key, $fallback)));
         };
 
-        return [
+        $settings = [
             'place_id' => $use_text('place_id'),
             'maps_url' => esc_url_raw(wp_unslash((string) $use_raw('maps_url'))),
             'scraper_service_url' => esc_url_raw(wp_unslash((string) $use_raw('scraper_service_url'))),
@@ -107,15 +101,15 @@ class Settings
             'google_place_name' => $use_text('google_place_name'),
             'remote_sync_consent' => !empty($input['remote_sync_consent']) ? 1 : 0,
             'review_target_url' => esc_url_raw(wp_unslash((string) $use_raw('review_target_url'))),
-            'theme' => in_array($use_text('theme', 'dark'), ['dark', 'light'], true) ? $use_text('theme', 'dark') : 'dark',
-            'default_stars' => $use_text('default_stars', 'all'),
+            'theme' => in_array($use_text('theme', 'light'), ['dark', 'light'], true) ? $use_text('theme', 'light') : 'light',
+            'default_stars' => in_array($use_text('default_stars', 'all'), ['all', '5', '4-5', '3-5', '4'], true) ? $use_text('default_stars', 'all') : 'all',
             'reviews_limit' => 6,
             'slider_mode' => in_array($use_text('slider_mode', 'auto'), ['auto', 'manual'], true) ? $use_text('slider_mode', 'auto') : 'auto',
-            'slider_speed' => max(0.1, min(5.0, round((float) $use_raw('slider_speed', 0.6), 1))),
+            'slider_speed' => 0.6,
             'last_sync' => $use_text('last_sync'),
             'last_sync_timestamp' => absint($use_raw('last_sync_timestamp', 0)),
             'last_sync_datetime' => $use_text('last_sync_datetime'),
-            'cache_duration' => max(1, min(72, absint($use_raw('cache_duration', 24)))),
+            'cache_duration' => 1,
             'enable_review_requests' => !empty($input['enable_review_requests']) ? 1 : (int) ($current['enable_review_requests'] ?? 0),
             'send_delay_days' => array_key_exists('send_delay_days', $input) ? max(0, min(30, absint($input['send_delay_days']))) : (int) ($current['send_delay_days'] ?? 0),
             'email_subject' => array_key_exists('email_subject', $input) ? sanitize_text_field(wp_unslash((string) $input['email_subject'])) : sanitize_text_field($current['email_subject'] ?? ''),
@@ -129,11 +123,28 @@ class Settings
             'google_stars_header' => max(1, min(5, absint($use_raw('google_stars_header', 5)))),
             'google_reviews_total' => absint($use_raw('google_reviews_total', 0)),
         ];
+
+        $this->clear_review_transients();
+
+        return $settings;
     }
 
     private function get_settings()
     {
         return get_option('mrg_settings', []);
+    }
+
+    private function clear_review_transients()
+    {
+        global $wpdb;
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+                '%_transient_mrg_reviews_cache_%',
+                '%_transient_timeout_mrg_reviews_cache_%'
+            )
+        );
     }
 
     public function render_maps_url()
@@ -256,11 +267,11 @@ class Settings
     public function render_theme()
     {
         $settings = $this->get_settings();
-        $value = $settings['theme'] ?? 'dark';
+        $value = $settings['theme'] ?? 'light';
 
         echo '<select name="mrg_settings[theme]">';
-        echo '<option value="dark" ' . selected($value, 'dark', false) . '>' . esc_html__('Oscuro', 'mis-resenas-de-google') . '</option>';
         echo '<option value="light" ' . selected($value, 'light', false) . '>' . esc_html__('Claro', 'mis-resenas-de-google') . '</option>';
+        echo '<option value="dark" ' . selected($value, 'dark', false) . '>' . esc_html__('Oscuro', 'mis-resenas-de-google') . '</option>';
         echo '</select>';
     }
 
@@ -281,12 +292,7 @@ class Settings
             echo '<option value="' . esc_attr($key) . '" ' . selected($value, $key, false) . '>' . esc_html($label) . '</option>';
         }
         echo '</select>';
-    }
-
-    public function render_reviews_limit()
-    {
-        echo '<input type="number" min="6" max="6" name="mrg_settings[reviews_limit]" value="6" readonly />';
-        echo '<p class="description">' . esc_html__('El plugin muestra y conserva siempre las 6 reseñas más recientes importadas.', 'mis-resenas-de-google') . '</p>';
+        echo '<p class="description">' . esc_html__('Este filtro solo cambia las reseñas que se muestran en la web.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_slider_mode()
@@ -297,44 +303,27 @@ class Settings
         echo '<fieldset>';
         echo '<label style="margin-right:15px;"><input type="radio" name="mrg_settings[slider_mode]" value="auto" ' . checked($mode, 'auto', false) . ' /> ' . esc_html__('Automatico', 'mis-resenas-de-google') . '</label>';
         echo '<label><input type="radio" name="mrg_settings[slider_mode]" value="manual" ' . checked($mode, 'manual', false) . ' /> ' . esc_html__('Manual', 'mis-resenas-de-google') . '</label>';
-        echo '<p class="description">' . esc_html__('Elige si las tarjetas se desplazan solas o con flechas.', 'mis-resenas-de-google') . '</p>';
+        echo '<p class="description">' . esc_html__('Solo cambia la navegacion visual del slider: automatica o con flechas.', 'mis-resenas-de-google') . '</p>';
         echo '</fieldset>';
-    }
-
-    public function render_slider_speed()
-    {
-        $settings = $this->get_settings();
-        $speed = $settings['slider_speed'] ?? 0.6;
-
-        printf(
-            '<input type="range" min="0.1" max="5" step="0.1" name="mrg_settings[slider_speed]" value="%s" id="mrg_slider_speed" style="width:200px;vertical-align:middle;" oninput="document.getElementById(\'mrg_speed_val\').textContent=this.value" />
-            <strong id="mrg_speed_val" style="margin-left:8px;">%s</strong>
-            <p class="description">%s</p>',
-            esc_attr($speed),
-            esc_html($speed),
-            esc_html__('Velocidad del desplazamiento automatico. Mas bajo = mas lento.', 'mis-resenas-de-google')
-        );
-    }
-
-    public function render_google_rating()
-    {
-        $settings = $this->get_settings();
-        $rating = $settings['google_rating'] ?? '5.0';
-
-        echo '<input type="text" name="mrg_settings[google_rating]" value="' . esc_attr($rating) . '" class="small-text" /> ';
-        echo '<span class="description">' . esc_html__('Se actualiza al importar. Puedes corregirlo manualmente si quieres.', 'mis-resenas-de-google') . '</span>';
     }
 
     public function render_google_stars_header()
     {
         $settings = $this->get_settings();
-        $stars = absint($settings['google_stars_header'] ?? 5);
+        $stars = max(1, min(5, absint($settings['google_stars_header'] ?? 5)));
 
         echo '<select name="mrg_settings[google_stars_header]">';
         for ($i = 5; $i >= 1; $i--) {
-            printf('<option value="%d" %s>%d %s</option>', $i, selected($stars, $i, false), $i, esc_html(_n('estrella', 'estrellas', $i, 'mis-resenas-de-google')));
+            printf(
+                '<option value="%d" %s>%d %s</option>',
+                $i,
+                selected($stars, $i, false),
+                $i,
+                esc_html(_n('estrella', 'estrellas', $i, 'mis-resenas-de-google'))
+            );
         }
         echo '</select>';
+        echo '<p class="description">' . esc_html__('Controla las estrellas grandes que aparecen junto a "Excelente".', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_google_reviews_total()
@@ -342,20 +331,11 @@ class Settings
         $settings = $this->get_settings();
         $total = absint($settings['google_reviews_total'] ?? 0);
 
-        echo '<input type="number" name="mrg_settings[google_reviews_total]" value="' . esc_attr($total) . '" class="regular-text" style="width:100px;" /> ';
-        echo '<span class="description">' . esc_html__('Numero total de reseñas mostrado en la cabecera.', 'mis-resenas-de-google') . '</span>';
-    }
-
-    public function render_cache_duration()
-    {
-        $settings = $this->get_settings();
-        $duration = absint($settings['cache_duration'] ?? 24);
-
         printf(
-            '<input type="number" min="1" max="72" name="mrg_settings[cache_duration]" value="%d" style="width:80px;" /> <span class="description">%s</span>',
-            $duration,
-            esc_html__('Horas (1-72).', 'mis-resenas-de-google')
+            '<input type="number" min="0" step="1" name="mrg_settings[google_reviews_total]" value="%d" class="small-text" />',
+            $total
         );
+        echo '<p class="description">' . esc_html__('Controla el numero del texto "A base de X reseñas". Si lo dejas a 0, se usara el total local.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_sync_section()
@@ -380,7 +360,7 @@ class Settings
 
         echo '<button type="button" id="mrg_btn_update_manual" class="button button-primary" style="margin-bottom:15px;">' . esc_html__('Importar reseñas ahora', 'mis-resenas-de-google') . '</button>';
         echo '<span id="mrg_manual_update_status" style="margin-left:10px;"></span>';
-        echo '<p class="description" style="margin-top:12px;">' . esc_html__('La importacion enviara la URL configurada a tu servicio externo y guardara las reseñas localmente en WordPress.', 'mis-resenas-de-google') . '</p>';
+        echo '<p class="description" style="margin-top:12px;">' . esc_html__('La importacion guardara localmente las 6 reseñas mas recientes para mostrarlas en WordPress.', 'mis-resenas-de-google') . '</p>';
         echo '</div>';
     }
 

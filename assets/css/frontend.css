@@ -7,10 +7,38 @@
     --mrg-brand: #4285f4;
     --mrg-star: #fbbc05;
     --mrg-text: #1f2937;
+    --mrg-body-text: #374151;
     --mrg-muted: #6b7280;
     --mrg-ring: #e8eaed;
     --mrg-bg-card: #ffffff;
+    --mrg-panel-border: #f1f3f4;
+    --mrg-button-bg: #ffffff;
+    --mrg-button-hover: #f8f9fa;
     --mrg-shadow: 0 4px 18px rgba(60, 64, 67, 0.10);
+}
+
+.mrg-theme-light {
+    --mrg-text: #1f2937;
+    --mrg-body-text: #374151;
+    --mrg-muted: #6b7280;
+    --mrg-ring: #e8eaed;
+    --mrg-bg-card: #ffffff;
+    --mrg-panel-border: #f1f3f4;
+    --mrg-button-bg: #ffffff;
+    --mrg-button-hover: #f8f9fa;
+    --mrg-shadow: 0 4px 18px rgba(60, 64, 67, 0.10);
+}
+
+.mrg-theme-dark {
+    --mrg-text: #f8fafc;
+    --mrg-body-text: #dbe4ef;
+    --mrg-muted: #a8b3c4;
+    --mrg-ring: #334155;
+    --mrg-bg-card: #111827;
+    --mrg-panel-border: #263244;
+    --mrg-button-bg: #172033;
+    --mrg-button-hover: #202b40;
+    --mrg-shadow: 0 12px 32px rgba(2, 6, 23, 0.28);
 }
 
 /* ═══════════════════════════════════════════════
@@ -78,9 +106,9 @@
 
 .mrg-header-right .mrg-btn-write {
     display: inline-block;
-    background: #fff;
+    background: var(--mrg-button-bg);
     color: var(--mrg-text) !important;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--mrg-ring);
     padding: 9px 20px;
     border-radius: 8px;
     font-weight: 600;
@@ -90,7 +118,7 @@
 }
 
 .mrg-header-right .mrg-btn-write:hover {
-    background: #f8f9fa;
+    background: var(--mrg-button-hover);
     box-shadow: 0 1px 4px rgba(60, 64, 67, .25);
 }
 
@@ -200,6 +228,7 @@
       simplemente es un flex container que hace scroll. */
     will-change: auto;
     width: max-content;
+    transform: none !important;
 }
 
 /* ═══════════════════════════════════════════════
@@ -237,7 +266,7 @@
     max-width: unset;
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--mrg-panel-border);
     padding: 14px 18px;
     justify-content: flex-start;
     gap: 12px;
@@ -275,7 +304,7 @@
     max-width: unset;
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid #f1f3f4;
+    border-bottom: 1px solid var(--mrg-panel-border);
     padding: 20px;
     justify-content: flex-start;
     gap: 15px;
@@ -337,7 +366,7 @@
     margin: 0;
     font-size: 14px;
     line-height: 1.35;
-    color: #111827;
+    color: var(--mrg-text);
 }
 
 .mrg-spotlight-count strong {
@@ -370,7 +399,7 @@
     gap: 16px;
     padding: 18px 18px 18px;
     border-radius: 16px;
-    border: 1px solid #d6d9de;
+    border: 1px solid var(--mrg-ring);
     box-shadow: none;
 }
 
@@ -429,7 +458,7 @@
     flex: 1;
     font-size: 14px;
     line-height: 1.5;
-    color: #111827;
+    color: var(--mrg-body-text);
     -webkit-line-clamp: 4;
     min-height: 0;
 }
@@ -446,8 +475,8 @@
 .mrg-design-spotlight .mrg-nav-btn {
     width: 46px;
     height: 46px;
-    background: #fff !important;
-    border: 1px solid #d1d5db !important;
+    background: var(--mrg-button-bg) !important;
+    border: 1px solid var(--mrg-ring) !important;
     border-radius: 999px;
     box-shadow: 0 8px 20px rgba(15, 23, 42, .08) !important;
 }
@@ -475,7 +504,7 @@
     padding: 20px 16px;
     min-width: 120px;
     max-width: 120px;
-    border-right: 1px solid #f1f3f4;
+    border-right: 1px solid var(--mrg-panel-border);
     text-align: center;
 }
 
@@ -566,7 +595,7 @@
 .mrg-review-content {
     font-size: 13.5px;
     line-height: 1.65;
-    color: #374151;
+    color: var(--mrg-body-text);
     flex-grow: 1;
     overflow: hidden;
     display: -webkit-box;
@@ -671,7 +700,7 @@
         max-width: unset;
         width: 100%;
         border-right: none;
-        border-bottom: 1px solid #f1f3f4;
+        border-bottom: 1px solid var(--mrg-panel-border);
         padding: 12px 14px;
         justify-content: flex-start;
         gap: 12px;

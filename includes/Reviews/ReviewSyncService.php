@@ -85,8 +85,13 @@ class ReviewSyncService
         $settings['reviews_limit'] = self::REMOTE_REVIEW_LIMIT;
         $settings['review_target_url'] = esc_url_raw($result['review_target_url'] ?? $maps_url);
         $settings['google_rating'] = $rating > 0 ? (string) $rating : ($settings['google_rating'] ?? '5.0');
-        $settings['google_stars_header'] = max(1, min(5, (int) round($rating > 0 ? $rating : 5)));
-        $settings['google_reviews_total'] = $total_reviews;
+        $settings['google_stars_header'] = !empty($settings['google_stars_header'])
+            ? max(1, min(5, absint($settings['google_stars_header'])))
+            : max(1, min(5, (int) round($rating > 0 ? $rating : 5)));
+        $settings['google_reviews_total'] = !empty($settings['google_reviews_total'])
+            ? absint($settings['google_reviews_total'])
+            : $total_reviews;
+        $settings['cache_duration'] = 1;
         $settings['last_sync'] = $current_datetime;
         $settings['last_sync_timestamp'] = $current_timestamp;
         $settings['last_sync_datetime'] = $current_datetime;

@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.11.1
+Stable tag: 2.11.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,7 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 **Reseñas Woo** importa reseñas de Google Maps, las guarda localmente en WordPress y permite mostrarlas con varios diseños listos para usar.
 
 ### Main Features
-* Import reviews through an external service with site-token support.
+* Import reviews through an external service.
 * Store reviews locally for fast frontend rendering.
 * Display reviews in horizontal, vertical, square, or spotlight layouts.
 * Send review request emails automatically after WooCommerce purchases.
@@ -24,7 +24,7 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 
 ### External Service
 This plugin can connect to an external review import service. The site owner must configure the service URL and explicitly consent before any Google Maps URL is sent to that service.
-The plugin sends only the Google Maps URL, the configured review limit, the site language, the site URL, and the site token when an import is manually triggered by an administrator.
+The plugin sends only the Google Maps URL, the configured review limit, the site language, the site URL, and an optional internal site token when an import is manually triggered by an administrator.
 
 == Installation ==
 
@@ -58,6 +58,14 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.11.3 =
+* Added clear header controls for the displayed total review count and header stars.
+* Fixed frontend theme styles and strengthened slider mode and star filter settings.
+
+= 2.11.2 =
+* Simplified the settings screen to show only useful controls for the current import flow.
+* Fixed review display values so limit, speed, cache, and header ratings are now handled automatically.
 
 = 2.10.6 =
 * Fixed the review pipeline to keep and display only the 6 most recent reviews.
