@@ -19,13 +19,14 @@ class Renderer
         $limit = 6;
         $stars = !empty($atts['stars']) ? sanitize_text_field($atts['stars']) : ($settings['default_stars'] ?? 'all');
         $stars = in_array($stars, ['all', '5', '4-5', '3-5', '4'], true) ? $stars : 'all';
+        $only_with_text = !empty($settings['only_text_reviews']);
         $design = !empty($atts['design']) ? sanitize_text_field($atts['design']) : 'horizontal';
 
-        $transient_key = 'mrg_reviews_cache_' . md5(json_encode(['limit' => $limit, 'stars' => $stars]));
+        $transient_key = 'mrg_reviews_cache_' . md5(json_encode(['limit' => $limit, 'stars' => $stars, 'text' => $only_with_text]));
         $reviews = get_transient($transient_key);
 
         if (false === $reviews) {
-            $reviews = $repo->get_reviews($limit, $stars, true);
+            $reviews = $repo->get_reviews($limit, $stars, true, $only_with_text);
             $cache_duration = 1;
             set_transient($transient_key, $reviews, $cache_duration * HOUR_IN_SECONDS);
             error_log("[MRG] Reviews cached for $cache_duration hours");

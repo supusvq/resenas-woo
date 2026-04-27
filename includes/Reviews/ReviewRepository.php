@@ -84,7 +84,7 @@ class ReviewRepository
         return $wpdb->delete($this->table, ['id' => (int) $id]);
     }
 
-    public function get_reviews($limit = 6, $stars = 'all', $only_active = false)
+    public function get_reviews($limit = 6, $stars = 'all', $only_active = false, $only_with_text = false)
     {
         global $wpdb;
         $limit = max(1, min(50, absint($limit)));
@@ -92,6 +92,10 @@ class ReviewRepository
 
         if ($only_active) {
             $where .= ' AND active = 1';
+        }
+
+        if ($only_with_text) {
+            $where .= " AND TRIM(COALESCE(review_text, '')) <> ''";
         }
 
         if ($stars === '5') {
