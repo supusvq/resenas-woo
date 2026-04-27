@@ -328,44 +328,44 @@
 
 /* Left panel — avatar + author info */
 .mrg-design-spotlight {
-    padding: 12px 0;
+    padding: 18px 0;
 }
 
 .mrg-spotlight-shell {
     display: grid;
-    grid-template-columns: 240px minmax(0, 1fr);
-    gap: 28px;
+    grid-template-columns: 214px minmax(0, 1fr);
+    gap: 24px;
     align-items: center;
 }
 
 .mrg-spotlight-summary {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    gap: 14px;
-    padding: 10px 12px;
-    text-align: center;
+    gap: 8px;
+    padding: 6px 10px 6px 18px;
+    text-align: left;
 }
 
 .mrg-spotlight-kicker {
-    font-size: 23px;
+    font-size: 25px;
     font-weight: 800;
-    line-height: 1.05;
-    letter-spacing: .01em;
+    line-height: 1;
+    letter-spacing: 0;
 }
 
 .mrg-spotlight-stars {
     color: var(--mrg-star);
-    font-size: 30px;
-    line-height: .95;
-    letter-spacing: 1px;
+    font-size: 32px;
+    line-height: 1;
+    letter-spacing: 0;
 }
 
 .mrg-spotlight-count {
     margin: 0;
     font-size: 14px;
-    line-height: 1.35;
+    line-height: 1.25;
     color: var(--mrg-text);
 }
 
@@ -379,7 +379,8 @@
 }
 
 .mrg-spotlight-logo {
-    height: 56px;
+    height: 36px;
+    margin-top: 4px;
 }
 
 .mrg-design-spotlight .mrg-carousel-container {
@@ -387,18 +388,18 @@
 }
 
 .mrg-design-spotlight .mrg-reviews-track {
-    gap: 12px;
-    padding: 10px 22px 10px 0;
+    gap: 16px;
+    padding: 4px 18px 4px 0;
 }
 
 .mrg-design-spotlight .mrg-review-card {
-    flex: 0 0 252px;
-    min-height: 244px;
+    flex: 0 0 264px;
+    min-height: 236px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding: 18px 18px 18px;
-    border-radius: 16px;
+    gap: 10px;
+    padding: 20px;
+    border-radius: 10px;
     border: 1px solid var(--mrg-ring);
     box-shadow: none;
 }
@@ -413,13 +414,13 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 12px;
+    gap: 10px;
 }
 
 .mrg-spotlight-card-author {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
 }
 
@@ -431,36 +432,38 @@
 }
 
 .mrg-design-spotlight .mrg-name {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 800;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .mrg-design-spotlight .mrg-date {
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .mrg-design-spotlight .mrg-google-icon-small {
-    width: 21px;
-    height: 21px;
-    margin-top: 2px;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
     flex-shrink: 0;
 }
 
 .mrg-design-spotlight .mrg-card-rating {
-    margin-bottom: 0;
-    font-size: 16px;
+    margin: 0;
+    font-size: 17px;
+    line-height: 1;
 }
 
 .mrg-design-spotlight .mrg-review-content {
     flex: 1;
-    font-size: 14px;
-    line-height: 1.5;
+    font-size: 16px;
+    line-height: 1.45;
     color: var(--mrg-body-text);
     -webkit-line-clamp: 4;
     min-height: 0;
+    opacity: 1;
 }
 
 .mrg-read-more-spotlight {
@@ -473,26 +476,26 @@
 }
 
 .mrg-design-spotlight .mrg-nav-btn {
-    width: 46px;
-    height: 46px;
+    width: 34px;
+    height: 34px;
     background: var(--mrg-button-bg) !important;
     border: 1px solid var(--mrg-ring) !important;
     border-radius: 999px;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, .08) !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .12) !important;
 }
 
 .mrg-design-spotlight .mrg-nav-btn svg {
-    width: 28px;
-    height: 28px;
+    width: 22px;
+    height: 22px;
     filter: none;
 }
 
 .mrg-design-spotlight .mrg-nav-prev {
-    left: -14px;
+    left: -18px;
 }
 
 .mrg-design-spotlight .mrg-nav-next {
-    right: -2px;
+    right: 0;
 }
 
 .mrg-card-left {
@@ -634,13 +637,13 @@
 @media (max-width: 600px) {
     .mrg-spotlight-shell {
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 14px;
     }
 
     .mrg-spotlight-summary {
-        align-items: center;
-        text-align: center;
-        padding: 0 12px;
+        align-items: flex-start;
+        text-align: left;
+        padding: 0 18px;
     }
 
     .mrg-header {
@@ -689,8 +692,8 @@
     }
 
     .mrg-design-spotlight .mrg-review-card {
-        flex: 0 0 84vw;
-        min-height: 220px;
+        flex: 0 0 82vw;
+        min-height: 230px;
         padding: 16px;
     }
 
