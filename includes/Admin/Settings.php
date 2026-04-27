@@ -118,6 +118,8 @@ class Settings
             'from_name' => array_key_exists('from_name', $input) ? sanitize_text_field(wp_unslash((string) $input['from_name'])) : sanitize_text_field($current['from_name'] ?? ''),
             'from_email' => array_key_exists('from_email', $input) ? sanitize_email(wp_unslash((string) $input['from_email'])) : sanitize_email($current['from_email'] ?? ''),
             'reply_to' => array_key_exists('reply_to', $input) ? sanitize_email(wp_unslash((string) $input['reply_to'])) : sanitize_email($current['reply_to'] ?? ''),
+            'email_company_name' => array_key_exists('email_company_name', $input) ? sanitize_text_field(wp_unslash((string) $input['email_company_name'])) : sanitize_text_field($current['email_company_name'] ?? get_bloginfo('name')),
+            'email_review_url' => array_key_exists('email_review_url', $input) ? esc_url_raw(wp_unslash((string) $input['email_review_url'])) : esc_url_raw($current['email_review_url'] ?? ''),
             'email_template' => array_key_exists('email_template', $input) ? wp_kses_post(wp_unslash((string) $input['email_template'])) : ($current['email_template'] ?? ''),
             'footer_privacy_email' => array_key_exists('footer_privacy_email', $input) ? sanitize_email(wp_unslash((string) $input['footer_privacy_email'])) : sanitize_email($current['footer_privacy_email'] ?? ''),
             'footer_privacy_url' => array_key_exists('footer_privacy_url', $input) ? esc_url_raw(wp_unslash((string) $input['footer_privacy_url'])) : esc_url_raw($current['footer_privacy_url'] ?? ''),
