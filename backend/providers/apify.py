@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from providers.base import BaseReviewProvider
@@ -9,6 +9,27 @@ from schemas import ImportRequest, ImportResponse, ReviewItem
 
 class ApifyProvider(BaseReviewProvider):
     name = "apify"
+    photo_keys = (
+        "authorImage",
+        "authorPhoto",
+        "authorPhotoUrl",
+        "authorPicture",
+        "authorProfilePhoto",
+        "profilePicture",
+        "profilePhoto",
+        "profilePhotoUrl",
+        "reviewerPhoto",
+        "reviewerPhotoUrl",
+        "reviewerImage",
+        "reviewerImageUrl",
+        "reviewerProfilePhotoUrl",
+        "userPhoto",
+        "userPhotoUrl",
+        "userImage",
+        "imageUrl",
+        "avatar",
+        "avatarUrl",
+    )
 
     def __init__(self) -> None:
         self.api_base = os.getenv("MRG_APIFY_API_BASE", "https://api.apify.com/v2").rstrip("/")
@@ -118,13 +139,44 @@ class ApifyProvider(BaseReviewProvider):
         return ReviewItem(
             review_id=str(review_id),
             author_name=str(author_name),
-            author_photo=str(item.get("authorImage") or item.get("authorPhoto") or item.get("profilePicture") or ""),
+            author_photo=self._extract_author_photo(item),
             rating=self.normalize_rating(rating),
             review_text=str(review_text),
             review_date=self.normalize_date_string(str(review_date)),
             relative_time=str(item.get("relativeTime") or item.get("publishedAt") or ""),
             is_anonymous=0 if str(author_name).strip() else 1,
         )
+
+    def _extract_author_photo(self, item: Dict[str, Any]) -> str:
+        photo = self._find_photo_url(item)
+        return photo or ""
+
+    def _find_photo_url(self, value: Any) -> Optional[str]:
+        if isinstance(value, dict):
+            for key in self.photo_keys:
+                photo = self._normalize_photo_url(value.get(key))
+                if photo:
+                    return photo
+
+            for nested_key in ("author", "reviewer", "user", "person", "profile"):
+                photo = self._find_photo_url(value.get(nested_key))
+                if photo:
+                    return photo
+
+        return None
+
+    def _normalize_photo_url(self, value: Any) -> Optional[str]:
+        if not value:
+            return None
+
+        url = str(value).strip()
+        if url.startswith("//"):
+            url = "https:" + url
+
+        if url.startswith(("http://", "https://")):
+            return url
+
+        return None
 
     def _missing_config(self) -> List[str]:
         missing = []
