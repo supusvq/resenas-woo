@@ -130,7 +130,50 @@ class Database
         $installed_ver = get_option('mrg_version', '1.0');
         if (version_compare($installed_ver, MRG_VERSION, '<')) {
             self::create_tables();
+            self::migrate_settings();
             update_option('mrg_version', MRG_VERSION);
+        }
+    }
+
+    private static function migrate_settings()
+    {
+        $settings = get_option('mrg_settings', []);
+        if (!is_array($settings)) {
+            return;
+        }
+
+        $changed = false;
+
+        if (!array_key_exists('email_review_url', $settings)) {
+            $settings['email_review_url'] = '';
+            $changed = true;
+        }
+
+        if (!empty($settings['email_template']) && is_string($settings['email_template'])) {
+            $updated_template = str_replace(
+                ['{texto_intro_resena}', '{texto_boton_resena}'],
+                [
+                    __('Tu opinión nos ayuda a seguir mejorando y a que otros clientes conozcan nuestro trabajo.', 'mis-resenas-de-google'),
+                    __('Escribir reseña', 'mis-resenas-de-google'),
+                ],
+                $settings['email_template']
+            );
+
+            if ($updated_template !== $settings['email_template']) {
+                $settings['email_template'] = $updated_template;
+                $changed = true;
+            }
+        }
+
+        foreach (['email_review_button_text', 'email_review_intro_text'] as $legacy_key) {
+            if (array_key_exists($legacy_key, $settings)) {
+                unset($settings[$legacy_key]);
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            update_option('mrg_settings', $settings);
         }
     }
 }

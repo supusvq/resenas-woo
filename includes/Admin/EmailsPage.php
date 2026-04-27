@@ -32,8 +32,7 @@ class EmailsPage
         $settings['from_email'] = sanitize_email(wp_unslash($_POST['from_email'] ?? ''));
         $settings['reply_to'] = sanitize_email(wp_unslash($_POST['reply_to'] ?? ''));
         $settings['email_company_name'] = sanitize_text_field(wp_unslash($_POST['email_company_name'] ?? ''));
-        $settings['email_review_button_text'] = sanitize_text_field(wp_unslash($_POST['email_review_button_text'] ?? ''));
-        $settings['email_review_intro_text'] = sanitize_textarea_field(wp_unslash($_POST['email_review_intro_text'] ?? ''));
+        $settings['email_review_url'] = esc_url_raw(wp_unslash($_POST['email_review_url'] ?? ''));
         $settings['footer_privacy_email'] = sanitize_email(wp_unslash($_POST['footer_privacy_email'] ?? ''));
         $settings['footer_privacy_url'] = esc_url_raw(wp_unslash($_POST['footer_privacy_url'] ?? ''));
         $settings['email_template'] = wp_kses_post(wp_unslash($_POST['email_template'] ?? ''));
@@ -65,10 +64,8 @@ class EmailsPage
             '{numero_pedido}' => '12345',
             '{fecha_pedido}' => date_i18n('d/m/Y'),
             '{productos}' => __('Producto de ejemplo', 'mis-resenas-de-google'),
-            '{enlace_resena}' => \MRG\Helpers::write_review_url(),
+            '{enlace_resena}' => !empty($settings['email_review_url']) ? esc_url($settings['email_review_url']) : \MRG\Helpers::write_review_url(),
             '{nombre_empresa}' => $settings['email_company_name'] ?? get_bloginfo('name'),
-            '{texto_boton_resena}' => $settings['email_review_button_text'] ?? __('Escribir reseña', 'mis-resenas-de-google'),
-            '{texto_intro_resena}' => $settings['email_review_intro_text'] ?? '',
             '{correo_empresa}' => $settings['footer_privacy_email'] ?? '',
             '{url_politica_privacidad}' => $settings['footer_privacy_url'] ?? '',
         ];
@@ -259,15 +256,14 @@ class EmailsPage
             'teeny' => false,
             'wpautop' => false,
         ]);
-        echo '<p class="description">' . sprintf(esc_html__('Variables: %s', 'mis-resenas-de-google'), '<code>{nombre_cliente}</code>, <code>{numero_pedido}</code>, <code>{fecha_pedido}</code>, <code>{productos}</code>, <code>{enlace_resena}</code>, <code>{nombre_empresa}</code>, <code>{texto_boton_resena}</code>, <code>{texto_intro_resena}</code>, <code>{correo_empresa}</code>, <code>{url_politica_privacidad}</code>') . '</p>';
+        echo '<p class="description">' . sprintf(esc_html__('Variables: %s', 'mis-resenas-de-google'), '<code>{nombre_cliente}</code>, <code>{numero_pedido}</code>, <code>{fecha_pedido}</code>, <code>{productos}</code>, <code>{enlace_resena}</code>, <code>{nombre_empresa}</code>, <code>{correo_empresa}</code>, <code>{url_politica_privacidad}</code>') . '</p>';
         echo '</td></tr>';
         echo '</table>';
 
         echo '<h3 style="margin-top:40px; border-bottom:1px solid #ccc; padding-bottom:10px;">' . esc_html__('VARIABLES EDITABLES', 'mis-resenas-de-google') . '</h3>';
         echo '<table class="form-table">';
         echo '<tr><th>' . esc_html__('Nombre de empresa', 'mis-resenas-de-google') . '</th><td><input type="text" class="regular-text" name="email_company_name" value="' . esc_attr($settings['email_company_name'] ?? get_bloginfo('name')) . '" /><p class="description">' . sprintf(esc_html__('Se usa para la variable %s', 'mis-resenas-de-google'), '<code>{nombre_empresa}</code>') . '</p></td></tr>';
-        echo '<tr><th>' . esc_html__('Texto del boton de reseña', 'mis-resenas-de-google') . '</th><td><input type="text" class="regular-text" name="email_review_button_text" value="' . esc_attr($settings['email_review_button_text'] ?? __('Escribir reseña', 'mis-resenas-de-google')) . '" /><p class="description">' . sprintf(esc_html__('Se usa para la variable %s', 'mis-resenas-de-google'), '<code>{texto_boton_resena}</code>') . '</p></td></tr>';
-        echo '<tr><th>' . esc_html__('Texto principal de reseña', 'mis-resenas-de-google') . '</th><td><textarea class="large-text" rows="3" name="email_review_intro_text">' . esc_textarea($settings['email_review_intro_text'] ?? '') . '</textarea><p class="description">' . sprintf(esc_html__('Se usa para la variable %s', 'mis-resenas-de-google'), '<code>{texto_intro_resena}</code>') . '</p></td></tr>';
+        echo '<tr><th>' . esc_html__('Enlace de reseña en Google', 'mis-resenas-de-google') . '</th><td><input type="url" class="regular-text" name="email_review_url" value="' . esc_attr($settings['email_review_url'] ?? '') . '" placeholder="https://g.page/r/..." /><p class="description">' . sprintf(esc_html__('Se usa para la variable %s. Si lo dejas vacío, se usará el enlace configurado automáticamente.', 'mis-resenas-de-google'), '<code>{enlace_resena}</code>') . '</p></td></tr>';
         echo '</table>';
 
         echo '<h3 style="margin-top:40px; border-bottom:1px solid #ccc; padding-bottom:10px;">' . esc_html__('FOOTER EMAIL', 'mis-resenas-de-google') . '</h3>';
