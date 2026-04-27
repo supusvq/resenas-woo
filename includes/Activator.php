@@ -35,6 +35,9 @@ class Activator
             'from_name' => get_bloginfo('name'),
             'from_email' => get_option('admin_email'),
             'reply_to' => get_option('admin_email'),
+            'email_company_name' => get_bloginfo('name'),
+            'email_review_button_text' => 'Escribir reseña',
+            'email_review_intro_text' => 'Tu opinión nos ayuda a seguir mejorando y a que otros clientes conozcan nuestro trabajo.',
             'footer_privacy_email' => get_option('admin_email'),
             'footer_privacy_url' => get_home_url() . '/politica-privacidad',
             'email_template' => self::get_default_email_template(),
@@ -65,7 +68,7 @@ class Activator
 <div style="font-size: 28px; line-height: 1; margin: 0 0 16px 0;">⭐⭐⭐⭐⭐</div>
 <div style="font-size: 20px; line-height: 1.2; font-weight: bold; color: #1d1d1f; margin: 0 0 16px 0;">Hola, {nombre_cliente}</div>
 <div style="font-size: 17px; line-height: 1.65; color: #424245; margin: 0 0 10px 0;">Gracias por confiar en <strong>{nombre_empresa}</strong>.</div>
-<div style="font-size: 17px; line-height: 1.65; color: #424245; margin: 0 0 26px 0;">Tu opinión nos ayuda a seguir mejorando y a que otros clientes conozcan nuestro trabajo.</div>
+<div style="font-size: 17px; line-height: 1.65; color: #424245; margin: 0 0 26px 0;">{texto_intro_resena}</div>
 <!-- Highlight box -->
 <table style="margin: 0 0 28px 0;" role="presentation" border="0" width="100%" cellspacing="0" cellpadding="0">
 <tbody>
@@ -85,7 +88,7 @@ class Activator
 <table border="0" cellspacing="0" cellpadding="0">
 <tbody>
 <tr>
-<td style="background-color: #135e96; border-radius: 8px; padding: 20px 44px 20px 44px;" align="center"><a style="padding: 20px 44px 20px 44px; font-size: 15px; font-weight: bold; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: Arial, Helvetica, sans-serif; white-space: nowrap; letter-spacing: 1px; text-transform: uppercase;" href="{enlace_resena}" target="_blank" rel="noopener"> ✍️   Escribir reseña </a></td>
+<td style="background-color: #135e96; border-radius: 8px; padding: 20px 44px 20px 44px;" align="center"><a style="padding: 20px 44px 20px 44px; font-size: 15px; font-weight: bold; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: Arial, Helvetica, sans-serif; white-space: nowrap; letter-spacing: 1px; text-transform: uppercase;" href="{enlace_resena}" target="_blank" rel="noopener"> ✍️   {texto_boton_resena} </a></td>
 </tr>
 </tbody>
 </table>
