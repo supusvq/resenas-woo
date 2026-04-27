@@ -22,6 +22,8 @@ Este repositorio mezcla dos piezas coordinadas:
 - `backend/providers/selenium_legacy.py`: scraper Selenium antiguo como fallback.
 - `backend/providers/demo.py`: datos de prueba.
 - `backend/service.py`: selecciona proveedor con `MRG_REVIEW_PROVIDER`.
+- `backend/tenant_store.py`: registro multi-cliente y tokens por sitio.
+- `backend/google_oauth.py`: OAuth centralizado de Google.
 
 ## Selenium legado
 

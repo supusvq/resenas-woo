@@ -22,7 +22,8 @@ Content-Type: application/json
   "maps_url": "https://www.google.com/maps/place/...",
   "max_reviews": 6,
   "language": "es",
-  "site_url": "https://tudominio.com/"
+  "site_url": "https://tudominio.com/",
+  "site_token": "token_del_sitio"
 }
 ```
 
@@ -32,6 +33,7 @@ Content-Type: application/json
 - `max_reviews`: maximo 6. El backend tambien fuerza este limite.
 - `language`: opcional. Idioma del sitio WordPress.
 - `site_url`: opcional. URL del sitio que hace la llamada.
+- `site_token`: recomendado en modo SaaS. Identifica la web cliente frente al backend.
 
 ## Respuesta correcta esperada
 
@@ -109,6 +111,22 @@ El plugin tambien acepta `error` o `detail` si no llega `message`.
 - `apify`: preparado para la siguiente fase.
 - `selenium_legacy`: fallback antiguo.
 - `demo`: pruebas sin servicios externos.
+
+## Endpoints SaaS
+
+- `POST /v1/sites/register`: registra una web y devuelve `site_token`.
+- `GET /v1/google/oauth/start`: devuelve URL OAuth para conectar Google.
+- `GET /v1/google/oauth/callback`: callback OAuth de Google.
+- `GET /v1/google/locations`: lista ubicaciones Google del cliente conectado.
+- `POST /v1/google/location`: guarda la ubicacion elegida para importar reseñas.
+
+## Ajustes WordPress relacionados
+
+- `scraper_service_url`: URL base del backend.
+- `service_site_token`: token del sitio devuelto por `/v1/sites/register`.
+- `google_account_id`: cuenta Google seleccionada.
+- `google_location_id`: ficha Google seleccionada.
+- `google_place_name`: nombre visible de la ficha.
 
 ## Notas importantes
 

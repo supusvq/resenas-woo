@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.10.6
+Stable tag: 2.11.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,7 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 **Reseñas Woo** importa reseñas de Google Maps, las guarda localmente en WordPress y permite mostrarlas con varios diseños listos para usar.
 
 ### Main Features
-* Import reviews from a Google Maps URL through an external import service.
+* Import reviews through an external service with site-token support.
 * Store reviews locally for fast frontend rendering.
 * Display reviews in horizontal, vertical, square, or spotlight layouts.
 * Send review request emails automatically after WooCommerce purchases.
@@ -24,7 +24,7 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 
 ### External Service
 This plugin can connect to an external review import service. The site owner must configure the service URL and explicitly consent before any Google Maps URL is sent to that service.
-The plugin sends only the Google Maps URL, the configured review limit, the site language, and the site URL when an import is manually triggered by an administrator.
+The plugin sends only the Google Maps URL, the configured review limit, the site language, the site URL, and the site token when an import is manually triggered by an administrator.
 
 == Installation ==
 

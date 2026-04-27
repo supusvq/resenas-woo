@@ -39,6 +39,11 @@ uvicorn app:app --host 127.0.0.1 --port 8000
 
 ## Google Business Profile
 
+Hay dos formas de usarlo:
+
+- SaaS multi-cliente: cada WordPress se registra, conecta Google por OAuth y el backend guarda su refresh token.
+- Configuracion fija por entorno: util solo para pruebas o una unica ficha.
+
 Este modo llama a:
 
 ```text
@@ -56,6 +61,70 @@ Variables necesarias:
 - `MRG_GBP_PLACE_NAME` opcional
 
 Para pruebas se puede usar `MRG_GBP_ACCESS_TOKEN`, pero en produccion es mejor usar refresh token OAuth porque el access token caduca.
+
+## Flujo SaaS multi-cliente
+
+Registrar una web:
+
+```text
+POST /v1/sites/register
+```
+
+Body:
+
+```json
+{
+  "site_url": "https://cliente.com/"
+}
+```
+
+Respuesta:
+
+```json
+{
+  "site_id": "site_xxx",
+  "site_token": "xxx",
+  "site_url": "https://cliente.com"
+}
+```
+
+Iniciar OAuth:
+
+```text
+GET /v1/google/oauth/start?site_url=https://cliente.com/&site_token=xxx
+```
+
+Callback configurado en Google Cloud:
+
+```text
+https://scraper.supufactory.es/v1/google/oauth/callback
+```
+
+Listar ubicaciones conectadas:
+
+```text
+GET /v1/google/locations?site_url=https://cliente.com/&site_token=xxx
+```
+
+Seleccionar ubicacion:
+
+```text
+POST /v1/google/location
+```
+
+Body:
+
+```json
+{
+  "site_url": "https://cliente.com/",
+  "site_token": "xxx",
+  "account_id": "accounts/123",
+  "location_id": "locations/456",
+  "place_name": "Nombre del negocio"
+}
+```
+
+Despues, el plugin puede importar reseñas enviando `site_url` y `site_token` en `/v1/import-reviews`.
 
 Importante: la API oficial solo sirve para fichas donde tengamos permiso en Google Business Profile. No sirve para rascar reseñas de cualquier negocio publico sin autorizacion.
 

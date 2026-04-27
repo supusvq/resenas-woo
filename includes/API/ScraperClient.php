@@ -8,10 +8,12 @@ if (!defined('ABSPATH')) {
 class ScraperClient
 {
     private $base_url;
+    private $site_token;
 
-    public function __construct($base_url = '')
+    public function __construct($base_url = '', $site_token = '')
     {
         $this->base_url = untrailingslashit((string) $base_url);
+        $this->site_token = sanitize_text_field((string) $site_token);
     }
 
     public function import_reviews($maps_url, $max_reviews = 200)
@@ -27,6 +29,10 @@ class ScraperClient
             'language' => substr(determine_locale(), 0, 2),
             'site_url' => home_url('/'),
         ];
+
+        if (!empty($this->site_token)) {
+            $payload['site_token'] = $this->site_token;
+        }
 
         $response = wp_safe_remote_post(
             $endpoint,

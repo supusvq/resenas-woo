@@ -8,16 +8,23 @@ from schemas import ImportRequest, ImportResponse, ReviewItem
 class GoogleBusinessProfileProvider(BaseReviewProvider):
     name = "google_business_profile"
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        refresh_token: str = "",
+        account_id: str = "",
+        location_id: str = "",
+        place_name: str = "",
+    ) -> None:
         self.api_base = os.getenv("MRG_GBP_API_BASE", "https://mybusiness.googleapis.com/v4").rstrip("/")
         self.token_url = os.getenv("MRG_GBP_TOKEN_URL", "https://oauth2.googleapis.com/token").strip()
         self.access_token = os.getenv("MRG_GBP_ACCESS_TOKEN", "").strip()
-        self.refresh_token = os.getenv("MRG_GBP_REFRESH_TOKEN", "").strip()
-        self.client_id = os.getenv("MRG_GBP_CLIENT_ID", "").strip()
-        self.client_secret = os.getenv("MRG_GBP_CLIENT_SECRET", "").strip()
-        self.account_id = os.getenv("MRG_GBP_ACCOUNT_ID", "").strip()
-        self.location_id = os.getenv("MRG_GBP_LOCATION_ID", "").strip()
-        self.place_name = os.getenv("MRG_GBP_PLACE_NAME", "").strip()
+        self.refresh_token = refresh_token or os.getenv("MRG_GBP_REFRESH_TOKEN", "").strip()
+        self.client_id = os.getenv("MRG_GBP_CLIENT_ID", os.getenv("MRG_GOOGLE_CLIENT_ID", "")).strip()
+        self.client_secret = os.getenv("MRG_GBP_CLIENT_SECRET", os.getenv("MRG_GOOGLE_CLIENT_SECRET", "")).strip()
+        self.account_id = account_id or os.getenv("MRG_GBP_ACCOUNT_ID", "").strip()
+        self.location_id = location_id or os.getenv("MRG_GBP_LOCATION_ID", "").strip()
+        self.place_name = place_name or os.getenv("MRG_GBP_PLACE_NAME", "").strip()
 
     def health(self) -> Dict[str, Any]:
         missing = self._missing_config()

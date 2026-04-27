@@ -34,6 +34,189 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    const btnRegisterSite = document.getElementById('mrg_btn_register_site');
+    const btnConnectGoogle = document.getElementById('mrg_btn_connect_google');
+    const siteTokenInput = document.getElementById('mrg_service_site_token');
+    const siteTokenStatus = document.getElementById('mrg_site_token_status');
+    const btnLoadLocations = document.getElementById('mrg_btn_load_locations');
+    const btnSaveLocation = document.getElementById('mrg_btn_save_location');
+    const locationsSelect = document.getElementById('mrg_google_locations_select');
+    const locationStatus = document.getElementById('mrg_google_location_status');
+
+    function setSiteStatus(message, ok) {
+        if (!siteTokenStatus) {
+            return;
+        }
+
+        siteTokenStatus.innerText = message;
+        siteTokenStatus.style.color = ok ? '#46b450' : '#dc3232';
+    }
+
+    function setLocationStatus(message, ok) {
+        if (!locationStatus) {
+            return;
+        }
+
+        locationStatus.innerText = message;
+        locationStatus.style.color = ok ? '#46b450' : '#dc3232';
+    }
+
+    if (btnRegisterSite) {
+        btnRegisterSite.addEventListener('click', function () {
+            btnRegisterSite.disabled = true;
+            setSiteStatus('Registrando...', true);
+
+            fetch(mrg_admin_vars.ajax_url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'mrg_register_site',
+                    nonce: mrg_admin_vars.nonce
+                })
+            })
+                .then(function (res) {
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (data.success) {
+                        if (siteTokenInput) {
+                            siteTokenInput.value = data.data.site_token;
+                        }
+                        setSiteStatus(data.data.message, true);
+                    } else {
+                        setSiteStatus('Error: ' + data.data, false);
+                    }
+                })
+                .catch(function () {
+                    setSiteStatus('Error al conectar con WordPress.', false);
+                })
+                .finally(function () {
+                    btnRegisterSite.disabled = false;
+                });
+        });
+    }
+
+    if (btnConnectGoogle) {
+        btnConnectGoogle.addEventListener('click', function () {
+            btnConnectGoogle.disabled = true;
+            setSiteStatus('Preparando conexion con Google...', true);
+
+            fetch(mrg_admin_vars.ajax_url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'mrg_start_google_oauth',
+                    nonce: mrg_admin_vars.nonce
+                })
+            })
+                .then(function (res) {
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (data.success && data.data.authorization_url) {
+                        window.location.href = data.data.authorization_url;
+                    } else {
+                        setSiteStatus('Error: ' + data.data, false);
+                    }
+                })
+                .catch(function () {
+                    setSiteStatus('Error al conectar con WordPress.', false);
+                })
+                .finally(function () {
+                    btnConnectGoogle.disabled = false;
+                });
+        });
+    }
+
+    if (btnLoadLocations) {
+        btnLoadLocations.addEventListener('click', function () {
+            btnLoadLocations.disabled = true;
+            setLocationStatus('Cargando fichas...', true);
+
+            fetch(mrg_admin_vars.ajax_url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'mrg_load_google_locations',
+                    nonce: mrg_admin_vars.nonce
+                })
+            })
+                .then(function (res) {
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (!data.success || !data.data.locations || !locationsSelect) {
+                        setLocationStatus('Error: ' + data.data, false);
+                        return;
+                    }
+
+                    locationsSelect.innerHTML = '';
+                    data.data.locations.forEach(function (location) {
+                        const option = document.createElement('option');
+                        option.value = JSON.stringify(location);
+                        option.textContent = location.place_name || location.location_id;
+                        locationsSelect.appendChild(option);
+                    });
+
+                    locationsSelect.style.display = 'inline-block';
+                    if (btnSaveLocation) {
+                        btnSaveLocation.style.display = 'inline-block';
+                    }
+                    setLocationStatus('Selecciona una ficha y guardala.', true);
+                })
+                .catch(function () {
+                    setLocationStatus('Error al conectar con WordPress.', false);
+                })
+                .finally(function () {
+                    btnLoadLocations.disabled = false;
+                });
+        });
+    }
+
+    if (btnSaveLocation) {
+        btnSaveLocation.addEventListener('click', function () {
+            if (!locationsSelect || !locationsSelect.value) {
+                setLocationStatus('Selecciona una ficha primero.', false);
+                return;
+            }
+
+            const selectedLocation = JSON.parse(locationsSelect.value);
+            btnSaveLocation.disabled = true;
+            setLocationStatus('Guardando ficha...', true);
+
+            fetch(mrg_admin_vars.ajax_url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'mrg_save_google_location',
+                    nonce: mrg_admin_vars.nonce,
+                    account_id: selectedLocation.account_id || '',
+                    location_id: selectedLocation.location_id || '',
+                    place_name: selectedLocation.place_name || ''
+                })
+            })
+                .then(function (res) {
+                    return res.json();
+                })
+                .then(function (data) {
+                    if (data.success) {
+                        setLocationStatus(data.data.message, true);
+                        setTimeout(function () {
+                            location.reload();
+                        }, 1200);
+                    } else {
+                        setLocationStatus('Error: ' + data.data, false);
+                    }
+                })
+                .catch(function () {
+                    setLocationStatus('Error al conectar con WordPress.', false);
+                })
+                .finally(function () {
+                    btnSaveLocation.disabled = false;
+                });
+        });
+    }
+
     const btnUploadAvatar = document.getElementById('mrg_btn_upload_avatar');
     const btnRemoveAvatar = document.getElementById('mrg_btn_remove_avatar');
     const inputAuthorPhoto = document.getElementById('mrg_author_photo');

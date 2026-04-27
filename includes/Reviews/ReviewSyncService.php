@@ -16,6 +16,7 @@ class ReviewSyncService
         $settings = get_option('mrg_settings', []);
         $maps_url = esc_url_raw($settings['maps_url'] ?? '');
         $service_url = esc_url_raw($settings['scraper_service_url'] ?? '');
+        $site_token = sanitize_text_field($settings['service_site_token'] ?? '');
         $has_consent = !empty($settings['remote_sync_consent']);
 
         if (empty($maps_url)) {
@@ -39,7 +40,7 @@ class ReviewSyncService
             ];
         }
 
-        $client = new ScraperClient($service_url);
+        $client = new ScraperClient($service_url, $site_token);
         $result = $client->import_reviews($maps_url, self::REMOTE_REVIEW_LIMIT);
 
         if (is_wp_error($result)) {

@@ -43,6 +43,18 @@ Valores validos:
 - `selenium_legacy`
 - `demo`
 
+## Flujo SaaS por cliente
+
+1. El WordPress cliente llama a `POST /v1/sites/register`.
+2. El backend devuelve `site_token`.
+3. El plugin guarda `service_site_token`.
+4. El cliente pulsa "Conectar Google".
+5. El backend inicia OAuth con Google usando `business.manage`.
+6. Google vuelve a `/v1/google/oauth/callback`.
+7. El backend guarda el refresh token ligado a ese sitio.
+8. El plugin lista ubicaciones con "Cargar fichas de Google" y guarda una.
+9. `/v1/import-reviews` usa el token del sitio para saber que ficha leer.
+
 ## Google Business Profile
 
 Variables necesarias:
@@ -57,6 +69,15 @@ MRG_GBP_LOCATION_ID=
 MRG_GBP_PLACE_NAME=
 ```
 
+Variables SaaS/OAuth:
+
+```text
+MRG_SAAS_DB_PATH=mrg_saas.sqlite3
+MRG_GOOGLE_CLIENT_ID=
+MRG_GOOGLE_CLIENT_SECRET=
+MRG_GOOGLE_REDIRECT_URI=https://scraper.supufactory.es/v1/google/oauth/callback
+```
+
 Pendiente real:
 
 - Crear/validar proyecto Google Cloud.
@@ -64,6 +85,7 @@ Pendiente real:
 - Conseguir OAuth con permisos sobre la ficha.
 - Guardar refresh token OAuth en el VPS para renovar access tokens.
 - Guardar token de forma segura en el VPS, no en Git.
+- Mejorar en siguiente fase: cifrar refresh tokens en SQLite.
 
 ## Apify
 

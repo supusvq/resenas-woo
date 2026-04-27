@@ -12,6 +12,10 @@ class Settings
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_scripts']);
         add_action('wp_ajax_mrg_update_reviews_manual', [$this, 'ajax_update_reviews_manual']);
+        add_action('wp_ajax_mrg_register_site', [$this, 'ajax_register_site']);
+        add_action('wp_ajax_mrg_start_google_oauth', [$this, 'ajax_start_google_oauth']);
+        add_action('wp_ajax_mrg_load_google_locations', [$this, 'ajax_load_google_locations']);
+        add_action('wp_ajax_mrg_save_google_location', [$this, 'ajax_save_google_location']);
     }
 
     public function enqueue_scripts($hook)
@@ -52,6 +56,8 @@ class Settings
 
         add_settings_field('maps_url', __('URL de Google Maps', 'mis-resenas-de-google'), [$this, 'render_maps_url'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('scraper_service_url', __('URL del servicio de importacion', 'mis-resenas-de-google'), [$this, 'render_scraper_service_url'], 'mrg-settings', 'mrg_main_section');
+        add_settings_field('service_site_token', __('Token del sitio', 'mis-resenas-de-google'), [$this, 'render_service_site_token'], 'mrg-settings', 'mrg_main_section');
+        add_settings_field('google_location', __('Ficha conectada', 'mis-resenas-de-google'), [$this, 'render_google_location'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('remote_sync_consent', __('Consentimiento del servicio externo', 'mis-resenas-de-google'), [$this, 'render_remote_sync_consent'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('theme', __('Tema', 'mis-resenas-de-google'), [$this, 'render_theme'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('default_stars', __('Filtro de estrellas por defecto', 'mis-resenas-de-google'), [$this, 'render_default_stars'], 'mrg-settings', 'mrg_main_section');
@@ -95,6 +101,10 @@ class Settings
             'place_id' => $use_text('place_id'),
             'maps_url' => esc_url_raw(wp_unslash((string) $use_raw('maps_url'))),
             'scraper_service_url' => esc_url_raw(wp_unslash((string) $use_raw('scraper_service_url'))),
+            'service_site_token' => $use_text('service_site_token'),
+            'google_account_id' => $use_text('google_account_id'),
+            'google_location_id' => $use_text('google_location_id'),
+            'google_place_name' => $use_text('google_place_name'),
             'remote_sync_consent' => !empty($input['remote_sync_consent']) ? 1 : 0,
             'review_target_url' => esc_url_raw(wp_unslash((string) $use_raw('review_target_url'))),
             'theme' => in_array($use_text('theme', 'dark'), ['dark', 'light'], true) ? $use_text('theme', 'dark') : 'dark',
@@ -153,6 +163,57 @@ class Settings
         );
 
         echo '<p class="description">' . esc_html__('URL base de tu servicio de importacion. El plugin llamara al endpoint /v1/import-reviews. Por defecto queda preparada para scraper.supufactory.es.', 'mis-resenas-de-google') . '</p>';
+    }
+
+    public function render_service_site_token()
+    {
+        $settings = $this->get_settings();
+
+        printf(
+            '<input type="text" id="mrg_service_site_token" name="mrg_settings[service_site_token]" value="%s" class="large-text" autocomplete="off" />',
+            esc_attr($settings['service_site_token'] ?? '')
+        );
+
+        echo '<p class="description">' . esc_html__('Identifica esta web frente al servicio Supu. No es una clave de Google; se genera al registrar el sitio en la plataforma.', 'mis-resenas-de-google') . '</p>';
+        echo '<p>';
+        echo '<button type="button" id="mrg_btn_register_site" class="button">' . esc_html__('Registrar este sitio', 'mis-resenas-de-google') . '</button> ';
+        echo '<button type="button" id="mrg_btn_connect_google" class="button button-secondary">' . esc_html__('Conectar Google', 'mis-resenas-de-google') . '</button> ';
+        echo '<span id="mrg_site_token_status"></span>';
+        echo '</p>';
+    }
+
+    public function render_google_location()
+    {
+        $settings = $this->get_settings();
+        $place_name = sanitize_text_field($settings['google_place_name'] ?? '');
+        $location_id = sanitize_text_field($settings['google_location_id'] ?? '');
+
+        if (!empty($place_name)) {
+            echo '<p><strong>' . esc_html($place_name) . '</strong></p>';
+        } elseif (!empty($location_id)) {
+            echo '<p><code>' . esc_html($location_id) . '</code></p>';
+        } else {
+            echo '<p>' . esc_html__('Todavia no hay ficha seleccionada.', 'mis-resenas-de-google') . '</p>';
+        }
+
+        printf(
+            '<input type="hidden" id="mrg_google_account_id" name="mrg_settings[google_account_id]" value="%s" />',
+            esc_attr($settings['google_account_id'] ?? '')
+        );
+        printf(
+            '<input type="hidden" id="mrg_google_location_id" name="mrg_settings[google_location_id]" value="%s" />',
+            esc_attr($settings['google_location_id'] ?? '')
+        );
+        printf(
+            '<input type="hidden" id="mrg_google_place_name" name="mrg_settings[google_place_name]" value="%s" />',
+            esc_attr($place_name)
+        );
+
+        echo '<select id="mrg_google_locations_select" style="min-width:320px;display:none;"></select> ';
+        echo '<button type="button" id="mrg_btn_load_locations" class="button">' . esc_html__('Cargar fichas de Google', 'mis-resenas-de-google') . '</button> ';
+        echo '<button type="button" id="mrg_btn_save_location" class="button button-secondary" style="display:none;">' . esc_html__('Guardar ficha', 'mis-resenas-de-google') . '</button> ';
+        echo '<span id="mrg_google_location_status"></span>';
+        echo '<p class="description">' . esc_html__('Despues de conectar Google, carga tus fichas y selecciona la que usara este WordPress.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_remote_sync_consent()
@@ -348,6 +409,202 @@ class Settings
                 'added' => $result['added'],
                 'updated' => $result['updated'] ?? 0,
                 'total' => $result['total_synced'],
+            ]
+        );
+    }
+
+    public function ajax_register_site()
+    {
+        check_ajax_referer('mrg_admin_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('No autorizado.', 'mis-resenas-de-google'));
+        }
+
+        $settings = $this->get_settings();
+        $service_url = untrailingslashit(esc_url_raw($settings['scraper_service_url'] ?? 'https://scraper.supufactory.es'));
+
+        if (empty($service_url)) {
+            wp_send_json_error(__('Configura primero la URL del servicio.', 'mis-resenas-de-google'));
+        }
+
+        $response = wp_safe_remote_post(
+            $service_url . '/v1/sites/register',
+            [
+                'timeout' => 30,
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'body' => wp_json_encode(['site_url' => home_url('/')]),
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if (empty($data['site_token'])) {
+            wp_send_json_error(__('El servicio no devolvio token del sitio.', 'mis-resenas-de-google'));
+        }
+
+        $settings['service_site_token'] = sanitize_text_field((string) $data['site_token']);
+        update_option('mrg_settings', $settings);
+
+        wp_send_json_success(
+            [
+                'site_token' => $settings['service_site_token'],
+                'message' => __('Sitio registrado correctamente.', 'mis-resenas-de-google'),
+            ]
+        );
+    }
+
+    public function ajax_start_google_oauth()
+    {
+        check_ajax_referer('mrg_admin_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('No autorizado.', 'mis-resenas-de-google'));
+        }
+
+        $settings = $this->get_settings();
+        $service_url = untrailingslashit(esc_url_raw($settings['scraper_service_url'] ?? 'https://scraper.supufactory.es'));
+        $site_token = sanitize_text_field($settings['service_site_token'] ?? '');
+
+        if (empty($service_url) || empty($site_token)) {
+            wp_send_json_error(__('Registra primero este sitio para obtener el token.', 'mis-resenas-de-google'));
+        }
+
+        $endpoint = add_query_arg(
+            [
+                'site_url' => home_url('/'),
+                'site_token' => $site_token,
+            ],
+            $service_url . '/v1/google/oauth/start'
+        );
+
+        $response = wp_safe_remote_get(
+            $endpoint,
+            [
+                'timeout' => 30,
+                'headers' => ['Accept' => 'application/json'],
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if (empty($data['authorization_url'])) {
+            wp_send_json_error(__('El servicio no devolvio URL de conexion con Google.', 'mis-resenas-de-google'));
+        }
+
+        wp_send_json_success(['authorization_url' => esc_url_raw((string) $data['authorization_url'])]);
+    }
+
+    public function ajax_load_google_locations()
+    {
+        check_ajax_referer('mrg_admin_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('No autorizado.', 'mis-resenas-de-google'));
+        }
+
+        $settings = $this->get_settings();
+        $service_url = untrailingslashit(esc_url_raw($settings['scraper_service_url'] ?? 'https://scraper.supufactory.es'));
+        $site_token = sanitize_text_field($settings['service_site_token'] ?? '');
+
+        if (empty($service_url) || empty($site_token)) {
+            wp_send_json_error(__('Registra y conecta primero este sitio.', 'mis-resenas-de-google'));
+        }
+
+        $endpoint = add_query_arg(
+            [
+                'site_url' => home_url('/'),
+                'site_token' => $site_token,
+            ],
+            $service_url . '/v1/google/locations'
+        );
+
+        $response = wp_safe_remote_get(
+            $endpoint,
+            [
+                'timeout' => 60,
+                'headers' => ['Accept' => 'application/json'],
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if (empty($data['locations']) || !is_array($data['locations'])) {
+            wp_send_json_error(__('No se encontraron fichas conectadas.', 'mis-resenas-de-google'));
+        }
+
+        wp_send_json_success(['locations' => $data['locations']]);
+    }
+
+    public function ajax_save_google_location()
+    {
+        check_ajax_referer('mrg_admin_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(__('No autorizado.', 'mis-resenas-de-google'));
+        }
+
+        $settings = $this->get_settings();
+        $service_url = untrailingslashit(esc_url_raw($settings['scraper_service_url'] ?? 'https://scraper.supufactory.es'));
+        $site_token = sanitize_text_field($settings['service_site_token'] ?? '');
+        $account_id = sanitize_text_field(wp_unslash((string) ($_POST['account_id'] ?? '')));
+        $location_id = sanitize_text_field(wp_unslash((string) ($_POST['location_id'] ?? '')));
+        $place_name = sanitize_text_field(wp_unslash((string) ($_POST['place_name'] ?? '')));
+
+        if (empty($service_url) || empty($site_token) || empty($account_id) || empty($location_id)) {
+            wp_send_json_error(__('Faltan datos para guardar la ficha.', 'mis-resenas-de-google'));
+        }
+
+        $response = wp_safe_remote_post(
+            $service_url . '/v1/google/location',
+            [
+                'timeout' => 30,
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ],
+                'body' => wp_json_encode(
+                    [
+                        'site_url' => home_url('/'),
+                        'site_token' => $site_token,
+                        'account_id' => $account_id,
+                        'location_id' => $location_id,
+                        'place_name' => $place_name,
+                    ]
+                ),
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        if (empty($data['success'])) {
+            wp_send_json_error(__('No se pudo guardar la ficha en el servicio.', 'mis-resenas-de-google'));
+        }
+
+        $settings['google_account_id'] = $account_id;
+        $settings['google_location_id'] = $location_id;
+        $settings['google_place_name'] = $place_name;
+        update_option('mrg_settings', $settings);
+
+        wp_send_json_success(
+            [
+                'message' => __('Ficha guardada correctamente.', 'mis-resenas-de-google'),
+                'place_name' => $place_name,
             ]
         );
     }
