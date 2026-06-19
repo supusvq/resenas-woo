@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.11.10
+Stable tag: 2.11.11
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,7 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 * Send review request emails automatically after WooCommerce purchases.
 * Manage invitations, retries, and delivery logs from the WordPress admin.
 * Filter displayed reviews by star rating.
+* Optionally hide external Google reviewer avatars to reduce PageSpeed transfer cost.
 
 ### External Service
 This plugin can connect to an external review import service. The site owner must configure the service URL and explicitly consent before any Google Maps URL is sent to that service.
@@ -58,6 +59,9 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.11.11 =
+* Added a default-enabled setting to hide review avatars and avoid loading external Google profile images.
 
 = 2.11.10 =
 * Preserved editable email variables when saving the general settings page.

@@ -60,6 +60,7 @@ class Settings
         add_settings_field('theme', __('Tema', 'mis-resenas-de-google'), [$this, 'render_theme'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('default_stars', __('Filtro de estrellas por defecto', 'mis-resenas-de-google'), [$this, 'render_default_stars'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('only_text_reviews', __('Reseñas visibles en slider', 'mis-resenas-de-google'), [$this, 'render_only_text_reviews'], 'mrg-settings', 'mrg_main_section');
+        add_settings_field('hide_review_avatars', __('Avatares de reseñas', 'mis-resenas-de-google'), [$this, 'render_hide_review_avatars'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('slider_mode', __('Modo de slider', 'mis-resenas-de-google'), [$this, 'render_slider_mode'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('google_stars_header', __('Estrellas mostradas en cabecera', 'mis-resenas-de-google'), [$this, 'render_google_stars_header'], 'mrg-settings', 'mrg_main_section');
         add_settings_field('google_reviews_total', __('Total mostrado en cabecera', 'mis-resenas-de-google'), [$this, 'render_google_reviews_total'], 'mrg-settings', 'mrg_main_section');
@@ -105,6 +106,7 @@ class Settings
             'theme' => in_array($use_text('theme', 'light'), ['dark', 'light'], true) ? $use_text('theme', 'light') : 'light',
             'default_stars' => in_array($use_text('default_stars', 'all'), ['all', '5', '4-5', '3-5', '4'], true) ? $use_text('default_stars', 'all') : 'all',
             'only_text_reviews' => array_key_exists('only_text_reviews', $input) ? 1 : (int) ($current['only_text_reviews'] ?? 1),
+            'hide_review_avatars' => array_key_exists('hide_review_avatars', $input) ? 1 : 0,
             'reviews_limit' => 6,
             'slider_mode' => in_array($use_text('slider_mode', 'auto'), ['auto', 'manual'], true) ? $use_text('slider_mode', 'auto') : 'auto',
             'slider_speed' => 0.6,
@@ -312,6 +314,21 @@ class Settings
         echo esc_html__('Mostrar solo reseñas que tengan comentario escrito.', 'mis-resenas-de-google');
         echo '</label>';
         echo '<p class="description">' . esc_html__('Recomendado: evita tarjetas vacias y hace el slider mas creible.', 'mis-resenas-de-google') . '</p>';
+    }
+
+    public function render_hide_review_avatars()
+    {
+        $settings = $this->get_settings();
+        $enabled = (int) ($settings['hide_review_avatars'] ?? 1);
+
+        echo '<label>';
+        printf(
+            '<input type="checkbox" name="mrg_settings[hide_review_avatars]" value="1" %s /> ',
+            checked($enabled, 1, false)
+        );
+        echo esc_html__('Ocultar avatares de reseñas', 'mis-resenas-de-google');
+        echo '</label>';
+        echo '<p class="description">' . esc_html__('Recomendado para PageSpeed: si está activo, el HTML no imprime las imágenes externas de Google.', 'mis-resenas-de-google') . '</p>';
     }
 
     public function render_slider_mode()

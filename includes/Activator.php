@@ -19,6 +19,7 @@ class Activator
             'review_target_url' => '',
             'theme' => 'dark',
             'default_stars' => 'all',
+            'hide_review_avatars' => 1,
             'reviews_limit' => 6,
             'cache_duration' => 24,
             'google_rating' => '5.0',

@@ -20,6 +20,7 @@ class Renderer
         $stars = !empty($atts['stars']) ? sanitize_text_field($atts['stars']) : ($settings['default_stars'] ?? 'all');
         $stars = in_array($stars, ['all', '5', '4-5', '3-5', '4'], true) ? $stars : 'all';
         $only_with_text = !empty($settings['only_text_reviews']);
+        $hide_avatars = !empty($settings['hide_review_avatars']);
         $design = !empty($atts['design']) ? sanitize_text_field($atts['design']) : 'horizontal';
 
         $transient_key = 'mrg_reviews_cache_' . md5(json_encode(['limit' => $limit, 'stars' => $stars, 'text' => $only_with_text]));
@@ -44,7 +45,7 @@ class Renderer
 
         ob_start();
         ?>
-        <div class="mrg-reviews-widget mrg-theme-<?php echo esc_attr($theme); ?> mrg-design-<?php echo esc_attr($design); ?>"
+        <div class="mrg-reviews-widget mrg-theme-<?php echo esc_attr($theme); ?> mrg-design-<?php echo esc_attr($design); ?><?php echo $hide_avatars ? ' mrg-hide-avatars' : ''; ?>"
             id="mrg-widget-<?php echo esc_attr(uniqid()); ?>" data-speed="<?php echo esc_attr($speed); ?>"
             data-mode="<?php echo esc_attr($slider_mode); ?>" data-design="<?php echo esc_attr($design); ?>">
             <?php if ($is_spotlight): ?>
@@ -71,7 +72,7 @@ class Renderer
                         </a>
                     </aside>
 
-                    <?php $this->render_carousel($reviews, $slider_mode, true); ?>
+                    <?php $this->render_carousel($reviews, $slider_mode, true, $hide_avatars); ?>
                 </div>
             <?php else: ?>
                 <div class="mrg-header">
@@ -95,7 +96,7 @@ class Renderer
                     </div>
                 </div>
 
-                <?php $this->render_carousel($reviews, $slider_mode, false); ?>
+                <?php $this->render_carousel($reviews, $slider_mode, false, $hide_avatars); ?>
             <?php endif; ?>
         </div>
         <?php
@@ -103,7 +104,7 @@ class Renderer
         return ob_get_clean();
     }
 
-    private function render_carousel($reviews, $slider_mode, $is_spotlight)
+    private function render_carousel($reviews, $slider_mode, $is_spotlight, $hide_avatars)
     {
         ?>
         <div class="mrg-carousel-container<?php echo $is_spotlight ? ' mrg-carousel-container-spotlight' : ''; ?>">
@@ -123,7 +124,7 @@ class Renderer
                                 <article class="mrg-review-card mrg-review-card-spotlight">
                                     <div class="mrg-spotlight-card-head">
                                         <div class="mrg-spotlight-card-author">
-                                            <?php $this->render_avatar($review); ?>
+                                            <?php $this->render_avatar($review, $hide_avatars); ?>
                                             <div class="mrg-spotlight-card-meta">
                                                 <span class="mrg-name"><?php echo esc_html($review->author_name); ?></span>
                                                 <span class="mrg-date"><?php echo esc_html($review->relative_time ?: $review->review_date); ?></span>
@@ -151,7 +152,7 @@ class Renderer
                             <?php else: ?>
                                 <article class="mrg-review-card">
                                     <div class="mrg-card-left">
-                                        <?php $this->render_avatar($review); ?>
+                                        <?php $this->render_avatar($review, $hide_avatars); ?>
                                         <div class="mrg-author-info">
                                             <span class="mrg-name"><?php echo esc_html($review->author_name); ?></span>
                                             <span class="mrg-date"><?php echo esc_html($review->relative_time ?: $review->review_date); ?></span>
@@ -194,8 +195,12 @@ class Renderer
         <?php
     }
 
-    private function render_avatar($review)
+    private function render_avatar($review, $hide_avatars)
     {
+        if ($hide_avatars) {
+            return;
+        }
+
         if (!empty($review->author_photo)) {
             ?>
             <img src="<?php echo esc_url($review->author_photo); ?>" class="mrg-author-photo" alt="">

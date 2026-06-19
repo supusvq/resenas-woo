@@ -511,6 +511,17 @@
     text-align: center;
 }
 
+.mrg-hide-avatars .mrg-card-left {
+    min-width: 112px;
+    max-width: 112px;
+    padding-top: 18px;
+    padding-bottom: 18px;
+}
+
+.mrg-hide-avatars .mrg-spotlight-card-author {
+    gap: 0;
+}
+
 /* Right panel — stars + review text */
 .mrg-card-body {
     display: flex;

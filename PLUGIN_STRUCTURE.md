@@ -1,6 +1,6 @@
 # Reseñas Woo — Documentación de Estructura del Plugin
 
-> **Versión:** 2.8 | **Autor:** Juan Gallardo | **PHP mínimo:** 7.4 | **WP mínimo:** 6.0  
+> **Versión:** 2.11.11 | **Autor:** Juan Gallardo | **PHP mínimo:** 7.4 | **WP mínimo:** 6.0
 > **Text Domain:** `mis-resenas-de-google` | **Prefijo constantes:** `MRG_` | **Namespace raíz:** `MRG\`
 
 ---
@@ -9,7 +9,7 @@
 
 ```
 mis-resenas-de-google/
-├── mis-resenas-de-google.php       ← Punto de entrada (v2.8)
+├── mis-resenas-de-google.php       ← Punto de entrada (v2.11.11)
 ├── uninstall.php                   ← Desinstalador completo (limpia BD + opciones)
 ├── readme.txt                      ← Metadatos WordPress.org
 │
@@ -23,14 +23,14 @@ mis-resenas-de-google/
 │
 ├── includes/
 │   ├── Autoloader.php              ← Carga automática de clases MRG\
-│   ├── Activator.php               ← Hook de activación (v2.1 con templates mejorados)
+│   ├── Activator.php               ← Hook de activación y defaults de ajustes
 │   ├── Deactivator.php             ← Hook de desactivación (sin cambios permanentes)
 │   ├── Database.php                ← Gestión de BD con sistema de upgrade
 │   ├── Helpers.php                 ← Funciones de utilidad
 │   │
 │   ├── Admin/
 │   │   ├── Menu.php                ← Menú principal y submenús
-│   │   ├── Settings.php            ← Configuración (API Key, Place ID)
+│   │   ├── Settings.php            ← Configuración general, importación y rendimiento
 │   │   ├── ReviewsPage.php         ← Gestión de reseñas almacenadas
 │   │   ├── EmailsPage.php          ← Configuración de correos HTML
 │   │   ├── LogsPage.php            ← Historial de envíos del cron
@@ -73,7 +73,7 @@ Define las constantes globales y arranca todos los módulos.
 
 | Constante | Valor |
 |---|---|
-| `MRG_VERSION` | `'2.8'` |
+| `MRG_VERSION` | `'2.11.11'` |
 | `MRG_FILE` | Ruta física al archivo |
 
 **Lógica principal:**
@@ -98,10 +98,22 @@ Se ejecuta al cargar el admin y compara `mrg_version` en la base de datos con `M
 
 ## ⚙️ Opciones de WordPress (`mrg_settings`)
 Todo se almacena en un array único serializado:
-- **Google:** `google_api_key`, `place_id`.
-- **Diseño:** `theme`, `default_stars`, `reviews_limit`, `slider_mode`.
-- **Emails:** `enable_review_requests`, `send_delay_days`, `email_subject`, `from_name`, `email_template`.
+- **Google/importación:** `maps_url`, `place_id`, `scraper_service_url`, `service_site_token`, `remote_sync_consent`.
+- **Diseño:** `theme`, `default_stars`, `only_text_reviews`, `reviews_limit`, `slider_mode`, `google_stars_header`, `google_reviews_total`.
+- **Rendimiento:** `hide_review_avatars` controla si se imprimen avatares externos de Google. Por defecto vale `1` para no cargar `lh3.googleusercontent.com` en frontend.
+- **Emails:** `enable_review_requests`, `send_delay_days`, `email_subject`, `from_name`, `email_template`, `email_review_url`, `email_company_name`.
 - **Privacidad:** `footer_privacy_email`, `footer_privacy_url`.
+
+### Rendimiento de avatares
+Desde `2.11.11`, la opción **Ocultar avatares de reseñas** está activada por defecto.
+Cuando `hide_review_avatars = 1`, `Frontend\Renderer::render_avatar()` no imprime ningún `<img>` ni fallback visual, por lo que no se solicita la URL externa de Google. No se oculta por CSS.
+
+Si en el futuro se implementa caché local de avatares, debe hacerse como fase separada:
+1. Descargar una vez desde `author_photo`.
+2. Redimensionar a máximo `48x48`.
+3. Convertir a WebP si `imagewebp()` está disponible.
+4. Guardar en `wp-content/uploads/reviews-avatars/`.
+5. Servir solo URL local y añadir acción admin para regenerar/limpiar caché.
 
 ---
 
@@ -117,15 +129,16 @@ Permite navegar por los últimos pedidos de WooCommerce, buscar clientes especí
 
 ## 🏗️ Estado de Desarrollo
 
-### ✅ Completado v2.8
+### ✅ Completado v2.11.11
 - [x] Arquitectura modular completa.
 - [x] Sistema de desinstalación (`uninstall.php`).
 - [x] Integración con WooCommerce y WP-Cron.
 - [x] Correos premium en formato HTML.
 - [x] Panel de invitaciones manuales.
 - [x] Widget frontend dinámico.
+- [x] Opción de rendimiento para no imprimir avatares externos de Google.
 
 ### 🔲 Pendiente
-- [ ] Implementación final de clientes API (Google real).
+- [ ] Caché local/WebP de avatares si PageSpeed lo requiere.
 - [ ] Archivos de idioma `.mo/.po`.
 - [ ] Separación de HTML de Renderer a archivos en `templates/`.

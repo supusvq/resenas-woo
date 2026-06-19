@@ -149,6 +149,11 @@ class Database
             $changed = true;
         }
 
+        if (!array_key_exists('hide_review_avatars', $settings)) {
+            $settings['hide_review_avatars'] = 1;
+            $changed = true;
+        }
+
         if (!empty($settings['email_template']) && is_string($settings['email_template'])) {
             $updated_template = str_replace(
                 ['{texto_intro_resena}', '{texto_boton_resena}'],
