@@ -83,11 +83,15 @@ class EmailsPage
         $sent = wp_mail($to, $subject, $message, $headers);
 
         $logs = new \MRG\Emails\EmailLogRepository();
+        // Id sintético negativo único por prueba: nunca choca con un order_id real de
+        // WooCommerce (siempre positivo), evitando que la UNIQUE KEY order_id pise
+        // o falle silenciosamente a partir del segundo email de prueba enviado.
+        $test_log_id = -1 * time();
         if ($sent) {
-            $logs->log(0, 'Prueba Técnica', $to, 'prueba', current_time('mysql'), current_time('mysql'));
+            $logs->log($test_log_id, 'Prueba Técnica', $to, 'prueba', current_time('mysql'), current_time('mysql'));
             wp_send_json_success(sprintf(__('Email de prueba enviado a %s', 'mis-resenas-de-google'), esc_html($to)));
         } else {
-            $logs->log(0, 'Prueba Técnica', $to, 'error', current_time('mysql'), null, 'Error en wp_mail envíando prueba.');
+            $logs->log($test_log_id, 'Prueba Técnica', $to, 'error', current_time('mysql'), null, 'Error en wp_mail envíando prueba.');
             wp_send_json_error(__('No se pudo enviar el email. Revisa la configuración SMTP de WordPress.', 'mis-resenas-de-google'));
         }
     }
