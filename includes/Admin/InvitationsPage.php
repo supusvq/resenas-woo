@@ -125,27 +125,49 @@ class InvitationsPage
         $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'date';
         $order = isset($_GET['order']) ? strtoupper(sanitize_text_field($_GET['order'])) : 'DESC';
 
-        // 1. OBTENCIÓN DE LA BASE DE DATOS (Pedidos completados)
-        // Obtenemos los últimos 500 para tener una base fresca
-        $base_ids = wc_get_orders([
-            'status' => 'completed',
-            'limit' => 500,
-            'return' => 'ids',
-        ]);
+        // Camino rápido: vista por defecto (sin búsqueda, sin filtro de estado, orden por fecha).
+        // Es el 100% de las cargas iniciales de esta pantalla. Aquí SÍ paginamos a nivel de
+        // consulta en vez de cargar 500+ pedidos en cada carga de página (I5).
+        $is_default_view = empty($search) && empty($status_filter) && $orderby === 'date';
 
-        // Si hay búsqueda, buscamos órdenes que coincidan específicamente (incluso si son antiguas)
-        $search_ids = [];
-        if (!empty($search)) {
-            $search_ids = wc_get_orders([
+        if ($is_default_view) {
+            $all_order_ids = wc_get_orders([
                 'status' => 'completed',
-                's' => $search,
-                'limit' => 100, // Límite para resultados de búsqueda específicos
-                'return' => 'ids'
+                'limit' => $per_page,
+                'paged' => $current_page,
+                'orderby' => 'date',
+                'order' => $order,
+                'return' => 'ids',
             ]);
-        }
+            $total_items = (int) wc_get_orders([
+                'status' => 'completed',
+                'limit' => 1,
+                'paginate' => true,
+                'return' => 'ids',
+            ])->total;
+        } else {
+            // 1. OBTENCIÓN DE LA BASE DE DATOS (Pedidos completados)
+            // Obtenemos los últimos 500 para tener una base fresca
+            $base_ids = wc_get_orders([
+                'status' => 'completed',
+                'limit' => 500,
+                'return' => 'ids',
+            ]);
 
-        // Combinamos y eliminamos duplicados
-        $all_order_ids = array_unique(array_merge($base_ids, $search_ids));
+            // Si hay búsqueda, buscamos órdenes que coincidan específicamente (incluso si son antiguas)
+            $search_ids = [];
+            if (!empty($search)) {
+                $search_ids = wc_get_orders([
+                    'status' => 'completed',
+                    's' => $search,
+                    'limit' => 100, // Límite para resultados de búsqueda específicos
+                    'return' => 'ids'
+                ]);
+            }
+
+            // Combinamos y eliminamos duplicados
+            $all_order_ids = array_unique(array_merge($base_ids, $search_ids));
+        }
 
         // 2. ENRIQUECIMIENTO DE DATOS
         $enriched_data = [];
@@ -244,9 +266,16 @@ class InvitationsPage
         });
 
         // 5. PAGINACIÓN
-        $total_items = count($enriched_data);
-        $total_pages = ceil($total_items / $per_page);
-        $paged_data = array_slice($enriched_data, ($current_page - 1) * $per_page, $per_page);
+        if ($is_default_view) {
+            // $total_items ya viene del conteo de WooCommerce (paso 1); $enriched_data
+            // ya es solo la página actual, no hay que volver a recortarla.
+            $total_pages = $total_items > 0 ? ceil($total_items / $per_page) : 1;
+            $paged_data = $enriched_data;
+        } else {
+            $total_items = count($enriched_data);
+            $total_pages = ceil($total_items / $per_page);
+            $paged_data = array_slice($enriched_data, ($current_page - 1) * $per_page, $per_page);
+        }
 
         // 6. RENDER
         $nonce = wp_create_nonce('mrg_invitations_action');
