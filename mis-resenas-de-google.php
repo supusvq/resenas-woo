@@ -9,6 +9,7 @@
  * Text Domain: mis-resenas-de-google
  * Requires at least: 6.0
  * Requires PHP: 7.4
+ * Requires Plugins: woocommerce
  */
 
 if (!defined('ABSPATH')) {
@@ -26,6 +27,12 @@ require_once MRG_PATH . 'includes/Autoloader.php';
 
 register_activation_hook(__FILE__, ['MRG\\Activator', 'activate']);
 register_deactivation_hook(__FILE__, ['MRG\\Deactivator', 'deactivate']);
+
+add_action('before_woocommerce_init', function () {
+    if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
 
 add_action('plugins_loaded', function () {
     load_plugin_textdomain('mis-resenas-de-google', false, dirname(MRG_BASENAME) . '/languages');
