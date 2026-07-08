@@ -201,6 +201,9 @@ class EmailLogRepository
 
         $wpdb->update($this->table, $data, ['order_id' => (int) $order_id]);
 
+        // Cancelar cualquier envío programado pendiente para este pedido (evita duplicados: C1)
+        wp_clear_scheduled_hook('mrg_send_scheduled_email', [(int) $order_id]);
+
         // Red de seguridad: Marcar el pedido en WooCommerce para que no se pierda si se borran los logs
         if (function_exists('update_post_meta')) {
             update_post_meta($order_id, '_mrg_invitation_sent', 'yes');
