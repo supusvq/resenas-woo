@@ -37,8 +37,18 @@ foreach ($options as $option) {
 }
 
 // 3. ELIMINAR METADATOS DE CUALQUIER PEDIDO DE WOOCOMMERCE
-// Limpieza de la marca '_mrg_invitation_sent' que indica si ya se invitó a un cliente
+// Limpieza de la marca '_mrg_invitation_sent' que indica si ya se invito a un cliente.
+// Se limpia tanto en postmeta (almacenamiento legacy) como en la tabla de meta de HPOS,
+// porque ambas pueden tener datos segun el modo de almacenamiento usado en la vida del sitio.
 $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_mrg_invitation_sent'");
 
-// 4. OPCIONAL: Limpiar eventos programados (aunque WP suele manejarlos, forzamos)
-wp_clear_scheduled_hook('mrg_send_scheduled_email');
+$hpos_meta_table = $wpdb->prefix . 'wc_orders_meta';
+if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $hpos_meta_table)) === $hpos_meta_table) {
+    $wpdb->query("DELETE FROM {$hpos_meta_table} WHERE meta_key = '_mrg_invitation_sent'");
+}
+
+// 4. Limpiar eventos programados. wp_clear_scheduled_hook() sin argumentos solo
+// desprograma eventos que se programaron SIN argumentos: los reales llevan [$order_id],
+// asi que quedaban huerfanos. wp_unschedule_hook() elimina TODOS los eventos del hook
+// sin importar sus argumentos (WP 5.1+; este plugin requiere WP 6.0+).
+wp_unschedule_hook('mrg_send_scheduled_email');
