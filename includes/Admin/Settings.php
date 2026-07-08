@@ -105,7 +105,7 @@ class Settings
             'review_target_url' => esc_url_raw(wp_unslash((string) $use_raw('review_target_url'))),
             'theme' => in_array($use_text('theme', 'light'), ['dark', 'light'], true) ? $use_text('theme', 'light') : 'light',
             'default_stars' => in_array($use_text('default_stars', 'all'), ['all', '5', '4-5', '3-5', '4'], true) ? $use_text('default_stars', 'all') : 'all',
-            'only_text_reviews' => array_key_exists('only_text_reviews', $input) ? 1 : (int) ($current['only_text_reviews'] ?? 1),
+            'only_text_reviews' => array_key_exists('only_text_reviews', $input) ? 1 : 0,
             'hide_review_avatars' => array_key_exists('hide_review_avatars', $input) ? 1 : 0,
             'reviews_limit' => 6,
             'slider_mode' => in_array($use_text('slider_mode', 'auto'), ['auto', 'manual'], true) ? $use_text('slider_mode', 'auto') : 'auto',
@@ -142,15 +142,7 @@ class Settings
 
     private function clear_review_transients()
     {
-        global $wpdb;
-
-        $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                '%_transient_mrg_reviews_cache_%',
-                '%_transient_timeout_mrg_reviews_cache_%'
-            )
-        );
+        \MRG\Helpers::delete_review_transients();
     }
 
     public function render_maps_url()

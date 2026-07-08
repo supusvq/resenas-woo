@@ -35,20 +35,6 @@ class Shortcode
             'design' => 'horizontal',
         ], $atts, 'mis_resenas_google');
 
-        // Excluir página del caché de LiteSpeed
-        if (defined('LSCACHE_ENABLED') && LSCACHE_ENABLED) {
-            if (function_exists('do_action')) {
-                do_action('litespeed_control_set_nocache');
-            }
-        }
-
-        // Headers HTTP para prevenir caché en navegadores
-        if (!headers_sent()) {
-            header('Cache-Control: no-cache, no-store, must-revalidate', true);
-            header('Pragma: no-cache', true);
-            header('Expires: 0', true);
-        }
-
         wp_enqueue_style('mrg-frontend');
         wp_enqueue_script('mrg-frontend');
 

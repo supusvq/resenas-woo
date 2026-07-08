@@ -49,8 +49,12 @@ class EmailLogRepository
             return true;
 
         // 2. Red de seguridad: Verificamos en los metadatos del pedido (por si se borró el historial)
-        if (function_exists('get_post_meta')) {
-            return get_post_meta($order_id, '_mrg_invitation_sent', true) === 'yes';
+        // Usa la API de WooCommerce para funcionar igual con HPOS activado o desactivado.
+        if (function_exists('wc_get_order')) {
+            $order = wc_get_order($order_id);
+            if ($order) {
+                return $order->get_meta('_mrg_invitation_sent', true) === 'yes';
+            }
         }
         return false;
     }
@@ -201,15 +205,16 @@ class EmailLogRepository
 
         $wpdb->update($this->table, $data, ['order_id' => (int) $order_id]);
 
-        // Red de seguridad: Marcar el pedido en WooCommerce para que no se pierda si se borran los logs
-        if (function_exists('update_post_meta')) {
-            update_post_meta($order_id, '_mrg_invitation_sent', 'yes');
-        }
+        // Cancelar cualquier envío programado pendiente para este pedido (evita duplicados: C1)
+        wp_clear_scheduled_hook('mrg_send_scheduled_email', [(int) $order_id]);
 
-        // Añadir nota al pedido para que el usuario lo vea en la pantalla de edición
+        // Red de seguridad: Marcar el pedido en WooCommerce para que no se pierda si se borran los logs.
+        // Usa $order->update_meta_data()+save() en vez de update_post_meta() para funcionar con HPOS.
         if (function_exists('wc_get_order')) {
             $order = wc_get_order($order_id);
             if ($order) {
+                $order->update_meta_data('_mrg_invitation_sent', 'yes');
+                $order->save();
                 $order->add_order_note(sprintf(__('Invitación de reseña enviada automáticamente (%s).', 'mis-resenas-de-google'), $origin_note));
             }
         }

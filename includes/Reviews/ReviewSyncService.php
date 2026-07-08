@@ -181,14 +181,6 @@ class ReviewSyncService
 
     private function clear_review_transients()
     {
-        global $wpdb;
-
-        $wpdb->query(
-            $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-                '%_transient_mrg_reviews_cache_%',
-                '%_transient_timeout_mrg_reviews_cache_%'
-            )
-        );
+        \MRG\Helpers::delete_review_transients();
     }
 }

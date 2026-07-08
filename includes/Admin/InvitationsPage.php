@@ -25,8 +25,22 @@ class InvitationsPage
             wp_send_json_error(__('No autorizado', 'mis-resenas-de-google'));
         }
 
-        global $wpdb;
-        $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_mrg_invitation_sent'");
+        // wc_get_orders() con meta_key/meta_value ya funciona igual con HPOS activado o no.
+        $order_ids = wc_get_orders([
+            'meta_key' => '_mrg_invitation_sent',
+            'meta_value' => 'yes',
+            'limit' => -1,
+            'return' => 'ids',
+        ]);
+
+        foreach ($order_ids as $order_id) {
+            $order = wc_get_order($order_id);
+            if ($order) {
+                $order->delete_meta_data('_mrg_invitation_sent');
+                $order->save();
+            }
+        }
+
         wp_send_json_success(__('Estados de envío limpiados en WooCommerce.', 'mis-resenas-de-google'));
     }
 
@@ -37,19 +51,34 @@ class InvitationsPage
             wp_send_json_error(__('No autorizado', 'mis-resenas-de-google'));
         }
 
-        global $wpdb;
-
-        // 1. Vaciar marcas actuales (Vaciar tabla visualmente de estados previos)
-        $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_mrg_invitation_sent'");
+        // 1. Vaciar marcas actuales
+        $current_ids = wc_get_orders([
+            'meta_key' => '_mrg_invitation_sent',
+            'meta_value' => 'yes',
+            'limit' => -1,
+            'return' => 'ids',
+        ]);
+        foreach ($current_ids as $order_id) {
+            $order = wc_get_order($order_id);
+            if ($order) {
+                $order->delete_meta_data('_mrg_invitation_sent');
+                $order->save();
+            }
+        }
 
         // 2. Regenerar desde el historial
+        global $wpdb;
         $logs_table = $wpdb->prefix . 'mrg_email_logs';
         $sent_logs = $wpdb->get_results("SELECT order_id FROM $logs_table WHERE status = 'enviado'");
 
         $count = 0;
         foreach ($sent_logs as $log) {
-            update_post_meta($log->order_id, '_mrg_invitation_sent', 'yes');
-            $count++;
+            $order = wc_get_order($log->order_id);
+            if ($order) {
+                $order->update_meta_data('_mrg_invitation_sent', 'yes');
+                $order->save();
+                $count++;
+            }
         }
 
         wp_send_json_success(sprintf(__('Restauración completada: Se han sincronizado %d registros desde el historial.', 'mis-resenas-de-google'), $count));
@@ -96,27 +125,49 @@ class InvitationsPage
         $orderby = isset($_GET['orderby']) ? sanitize_text_field($_GET['orderby']) : 'date';
         $order = isset($_GET['order']) ? strtoupper(sanitize_text_field($_GET['order'])) : 'DESC';
 
-        // 1. OBTENCIÓN DE LA BASE DE DATOS (Pedidos completados)
-        // Obtenemos los últimos 500 para tener una base fresca
-        $base_ids = wc_get_orders([
-            'status' => 'completed',
-            'limit' => 500,
-            'return' => 'ids',
-        ]);
+        // Camino rápido: vista por defecto (sin búsqueda, sin filtro de estado, orden por fecha).
+        // Es el 100% de las cargas iniciales de esta pantalla. Aquí SÍ paginamos a nivel de
+        // consulta en vez de cargar 500+ pedidos en cada carga de página (I5).
+        $is_default_view = empty($search) && empty($status_filter) && $orderby === 'date';
 
-        // Si hay búsqueda, buscamos órdenes que coincidan específicamente (incluso si son antiguas)
-        $search_ids = [];
-        if (!empty($search)) {
-            $search_ids = wc_get_orders([
+        if ($is_default_view) {
+            $all_order_ids = wc_get_orders([
                 'status' => 'completed',
-                's' => $search,
-                'limit' => 100, // Límite para resultados de búsqueda específicos
-                'return' => 'ids'
+                'limit' => $per_page,
+                'paged' => $current_page,
+                'orderby' => 'date',
+                'order' => $order,
+                'return' => 'ids',
             ]);
-        }
+            $total_items = (int) wc_get_orders([
+                'status' => 'completed',
+                'limit' => 1,
+                'paginate' => true,
+                'return' => 'ids',
+            ])->total;
+        } else {
+            // 1. OBTENCIÓN DE LA BASE DE DATOS (Pedidos completados)
+            // Obtenemos los últimos 500 para tener una base fresca
+            $base_ids = wc_get_orders([
+                'status' => 'completed',
+                'limit' => 500,
+                'return' => 'ids',
+            ]);
 
-        // Combinamos y eliminamos duplicados
-        $all_order_ids = array_unique(array_merge($base_ids, $search_ids));
+            // Si hay búsqueda, buscamos órdenes que coincidan específicamente (incluso si son antiguas)
+            $search_ids = [];
+            if (!empty($search)) {
+                $search_ids = wc_get_orders([
+                    'status' => 'completed',
+                    's' => $search,
+                    'limit' => 100, // Límite para resultados de búsqueda específicos
+                    'return' => 'ids'
+                ]);
+            }
+
+            // Combinamos y eliminamos duplicados
+            $all_order_ids = array_unique(array_merge($base_ids, $search_ids));
+        }
 
         // 2. ENRIQUECIMIENTO DE DATOS
         $enriched_data = [];
@@ -149,7 +200,7 @@ class InvitationsPage
                     $attempts = $log->attempts;
                     $error = $log->error_message;
                 } else {
-                    $legacy_sent = get_post_meta($oid, '_mrg_invitation_sent', true);
+                    $legacy_sent = $order_obj->get_meta('_mrg_invitation_sent', true);
                     if ($legacy_sent === 'yes') {
                         $status = 'enviado';
                         $error = __('Sincronizado vía meta', 'mis-resenas-de-google');
@@ -215,9 +266,16 @@ class InvitationsPage
         });
 
         // 5. PAGINACIÓN
-        $total_items = count($enriched_data);
-        $total_pages = ceil($total_items / $per_page);
-        $paged_data = array_slice($enriched_data, ($current_page - 1) * $per_page, $per_page);
+        if ($is_default_view) {
+            // $total_items ya viene del conteo de WooCommerce (paso 1); $enriched_data
+            // ya es solo la página actual, no hay que volver a recortarla.
+            $total_pages = $total_items > 0 ? ceil($total_items / $per_page) : 1;
+            $paged_data = $enriched_data;
+        } else {
+            $total_items = count($enriched_data);
+            $total_pages = ceil($total_items / $per_page);
+            $paged_data = array_slice($enriched_data, ($current_page - 1) * $per_page, $per_page);
+        }
 
         // 6. RENDER
         $nonce = wp_create_nonce('mrg_invitations_action');
