@@ -40,4 +40,21 @@ class Helpers
         $rating = max(0, min(5, (int) $rating));
         return str_repeat('★', $rating) . str_repeat('☆', 5 - $rating);
     }
+
+    public static function delete_review_transients()
+    {
+        global $wpdb;
+
+        $option_names = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $wpdb->esc_like('_transient_mrg_reviews_cache_') . '%'
+            )
+        );
+
+        foreach ($option_names as $option_name) {
+            $transient_key = str_replace('_transient_', '', $option_name);
+            delete_transient($transient_key);
+        }
+    }
 }
