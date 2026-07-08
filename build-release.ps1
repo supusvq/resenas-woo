@@ -29,6 +29,8 @@ $excludeNames = @(
     'backend',
     'docs',
     'skills',
+    '.git',
+    '.gitignore',
     'AGENTS.md',
     'CLAUDE.MD',
     'PLUGIN_STRUCTURE.md',
