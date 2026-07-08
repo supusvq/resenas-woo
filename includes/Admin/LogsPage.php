@@ -378,12 +378,12 @@ class LogsPage
                 document.getElementById('mrg-btn-stop').onclick = () => {
                     cancelBulk = true;
                     const btn = document.getElementById('mrg-btn-stop');
-                    btn.textContent = "' . esc_js(__('Deteniendo...', 'mis-resenas-de-google')) . '";
+                    btn.textContent = "<?php echo esc_js(__('Deteniendo...', 'mis-resenas-de-google')); ?>";
                     btn.disabled = true;
                 };
 
                 const startBulk = async (type) => {
-                    if (!confirm("' . esc_js(__('¿Deseas iniciar el envío masivo escalonado (espera de 30s entre correos)?', 'mis-resenas-de-google')) . '")) return;
+                    if (!confirm("<?php echo esc_js(__('¿Deseas iniciar el envío masivo escalonado (espera de 30s entre correos)?', 'mis-resenas-de-google')); ?>")) return;
 
                     cancelBulk = false;
                     const btnP = document.getElementById('mrg-btn-bulk-pending');
@@ -397,11 +397,11 @@ class LogsPage
                     btnP.disabled = btnE.disabled = true;
                     btnStop.style.display = 'inline-block';
                     btnStop.disabled = false;
-                    btnStop.textContent = "' . esc_js(__('⏹ Detener envío', 'mis-resenas-de-google')) . '";
+                    btnStop.textContent = "<?php echo esc_js(__('⏹ Detener envío', 'mis-resenas-de-google')); ?>";
                     progressArea.style.display = 'block';
 
                     try {
-                        statusText.textContent = "' . esc_js(__('Obteniendo lista de tareas...', 'mis-resenas-de-google')) . '";
+                        statusText.textContent = "<?php echo esc_js(__('Obteniendo lista de tareas...', 'mis-resenas-de-google')); ?>";
                         const response = await fetch(ajaxurl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -425,14 +425,14 @@ class LogsPage
                         if (totalLabel) totalLabel.textContent = totalInDB;
 
                         if (!ids || !ids.length) {
-                            alert("' . esc_js(__('No hay registros para procesar.', 'mis-resenas-de-google')) . '");
+                            alert("<?php echo esc_js(__('No hay registros para procesar.', 'mis-resenas-de-google')); ?>");
                             location.reload();
                             return;
                         }
 
                         for (let i = 0; i < ids.length; i++) {
                             if (cancelBulk) {
-                                statusText.textContent = "' . esc_js(__('Proceso detenido por el usuario.', 'mis-resenas-de-google')) . '";
+                                statusText.textContent = "<?php echo esc_js(__('Proceso detenido por el usuario.', 'mis-resenas-de-google')); ?>";
                                 break;
                             }
 
@@ -440,7 +440,7 @@ class LogsPage
                             const currentIdx = i + 1;
                             const percent = (currentIdx / ids.length) * 100;
 
-                            statusText.textContent = "' . esc_js(__('Enviando pedido #', 'mis-resenas-de-google')) . '" + orderId + " (" + currentIdx + " ' . esc_js(__('de', 'mis-resenas-de-google')) . ' " + ids.length + ")...";
+                            statusText.textContent = "<?php echo esc_js(__('Enviando pedido #', 'mis-resenas-de-google')); ?>" + orderId + " (" + currentIdx + " <?php echo esc_js(__('de', 'mis-resenas-de-google')); ?> " + ids.length + ")...";
                             progressBar.style.width = percent + '%';
                             timerText.textContent = '';
 
@@ -457,19 +457,19 @@ class LogsPage
                             if (i < ids.length - 1 && !cancelBulk) {
                                 let countdown = 30;
                                 while (countdown > 0 && !cancelBulk) {
-                                    timerText.textContent = "' . esc_js(__('Próximo envío en', 'mis-resenas-de-google')) . ' " + countdown + " ' . esc_js(__('segundos...', 'mis-resenas-de-google')) . '";
+                                    timerText.textContent = "<?php echo esc_js(__('Próximo envío en', 'mis-resenas-de-google')); ?> " + countdown + " <?php echo esc_js(__('segundos...', 'mis-resenas-de-google')); ?>";
                                     await new Promise(r => setTimeout(r, 1000));
                                     countdown--;
                                 }
                             }
                         }
 
-                        if (!cancelBulk) statusText.textContent = "' . esc_js(__('¡Completado!', 'mis-resenas-de-google')) . '";
-                        alert(cancelBulk ? "' . esc_js(__('Envío detenido.', 'mis-resenas-de-google')) . '" : "' . esc_js(__('Proceso masivo finalizado.', 'mis-resenas-de-google')) . '");
+                        if (!cancelBulk) statusText.textContent = "<?php echo esc_js(__('¡Completado!', 'mis-resenas-de-google')); ?>";
+                        alert(cancelBulk ? "<?php echo esc_js(__('Envío detenido.', 'mis-resenas-de-google')); ?>" : "<?php echo esc_js(__('Proceso masivo finalizado.', 'mis-resenas-de-google')); ?>");
                         location.reload();
 
                     } catch (err) {
-                        alert("' . esc_js(__('Error en el proceso masivo: ', 'mis-resenas-de-google')) . '" + err.message);
+                        alert("<?php echo esc_js(__('Error en el proceso masivo: ', 'mis-resenas-de-google')); ?>" + err.message);
                         btnP.disabled = btnE.disabled = false;
                         btnStop.style.display = 'none';
                     }
@@ -479,11 +479,11 @@ class LogsPage
                 document.getElementById('mrg-btn-bulk-errors').onclick = () => startBulk('error');
 
                 document.getElementById('mrg-btn-clear-logs').onclick = function () {
-                    const msg = "⚠️ ' . esc_js(__('ATENCIÓN: Estás a punto de borrar la tabla de historial.', 'mis-resenas-de-google')) . '\n\n" +
-                        "- ' . esc_js(__('Los datos de fecha de envío y errores técnicos se perderán de esta vista.', 'mis-resenas-de-google')) . '\n" +
-                        "- ' . esc_js(__('NO se enviarán correos duplicados porque conservamos una marca oculta en WooCommerce.', 'mis-resenas-de-google')) . '\n" +
-                        "- ' . esc_js(__('Puedes usar el botón \'Restaurar\' para recuperar los registros enviados.', 'mis-resenas-de-google')) . '\n\n" +
-                        "' . esc_js(__('¿Deseas continuar con el borrado?', 'mis-resenas-de-google')) . '";
+                    const msg = "⚠️ <?php echo esc_js(__('ATENCIÓN: Estás a punto de borrar la tabla de historial.', 'mis-resenas-de-google')); ?>\n\n" +
+                        "- <?php echo esc_js(__('Los datos de fecha de envío y errores técnicos se perderán de esta vista.', 'mis-resenas-de-google')); ?>\n" +
+                        "- <?php echo esc_js(__('NO se enviarán correos duplicados porque conservamos una marca oculta en WooCommerce.', 'mis-resenas-de-google')); ?>\n" +
+                        "- <?php echo esc_js(__('Puedes usar el botón \'Restaurar\' para recuperar los registros enviados.', 'mis-resenas-de-google')); ?>\n\n" +
+                        "<?php echo esc_js(__('¿Deseas continuar con el borrado?', 'mis-resenas-de-google')); ?>";
                     if (!confirm(msg)) return;
 
                     fetch(ajaxurl, {
@@ -502,11 +502,11 @@ class LogsPage
                 };
 
                 document.getElementById('mrg-btn-restore').onclick = function () {
-                    if (!confirm("' . esc_js(__('Este proceso buscará en WooCommerce todos los pedidos marcados como \'Enviados\' para reconstruir el historial. ¿Deseas continuar?', 'mis-resenas-de-google')) . '")) return;
+                    if (!confirm("<?php echo esc_js(__('Este proceso buscará en WooCommerce todos los pedidos marcados como \'Enviados\' para reconstruir el historial. ¿Deseas continuar?', 'mis-resenas-de-google')); ?>")) return;
 
                     const btn = this;
                     btn.disabled = true;
-                    btn.textContent = "' . esc_js(__('Restaurando...', 'mis-resenas-de-google')) . '";
+                    btn.textContent = "<?php echo esc_js(__('Restaurando...', 'mis-resenas-de-google')); ?>";
 
                     fetch(ajaxurl, {
                         method: 'POST',
@@ -522,9 +522,9 @@ class LogsPage
                             location.reload();
                         })
                         .catch(() => {
-                            alert("' . esc_js(__('Error de conexión.', 'mis-resenas-de-google')) . '");
+                            alert("<?php echo esc_js(__('Error de conexión.', 'mis-resenas-de-google')); ?>");
                             btn.disabled = false;
-                            btn.textContent = "♻ ' . esc_js(__('Restaurar Historial', 'mis-resenas-de-google')) . '";
+                            btn.textContent = "♻ <?php echo esc_js(__('Restaurar Historial', 'mis-resenas-de-google')); ?>";
                         });
                 };
             })();
