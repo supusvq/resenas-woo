@@ -114,35 +114,41 @@ class EmailsPage
                 'return' => 'ids',
             ]);
 
-            error_log("[MRG] ajax_bulk_count: Encontrados " . count($order_ids) . " pedidos completados.");
-
             if (empty($order_ids)) {
-                wp_send_json_success(['count' => 0]);
+                wp_send_json_success(['count' => 0, 'ids' => []]);
             }
 
             global $wpdb;
             $logs_table = $wpdb->prefix . 'mrg_email_logs';
+
+            // Pedidos que YA tienen fila en el historial (de cualquier estado): se excluyen.
+            $logged_order_ids = array_map('intval', $wpdb->get_col("SELECT order_id FROM $logs_table WHERE order_id > 0"));
+
+            // Regla "un email por cliente": excluir también por email ya presente en el historial.
             $existing_emails = $wpdb->get_col("SELECT DISTINCT customer_email FROM $logs_table");
-            if (!is_array($existing_emails)) {
-                $existing_emails = [];
-            }
+            $existing_emails = is_array($existing_emails) ? array_map('strtolower', $existing_emails) : [];
 
+            // Solo LECTURA: no se crea ninguna fila en mrg_email_logs en este paso.
             $to_send_ids = [];
-            $repo = new \MRG\Emails\EmailLogRepository();
-
             foreach ($order_ids as $order_id) {
-                // Intentamos asegurar el log. Si devuelve true, es que es un destinatario válido (o ID ya existente).
-                // Pero como aquí buscamos "nuevos", usamos check_email = true.
-                if ($repo->ensure_log_exists($order_id, null, true)) {
-                    // Verificamos que sea 'no_iniciado' (nuevo) y no uno ya enviado que acaba de encontrar
-                    $log = $repo->get_log_by_order_id($order_id);
-                    if ($log && $log->status === 'no_iniciado') {
-                        $to_send_ids[] = $order_id;
-                    }
+                if (in_array((int) $order_id, $logged_order_ids, true)) {
+                    continue;
                 }
+
+                $order = wc_get_order($order_id);
+                if (!$order) {
+                    continue;
+                }
+
+                $email = strtolower($order->get_billing_email());
+                if (empty($email) || in_array($email, $existing_emails, true)) {
+                    continue;
+                }
+
+                $to_send_ids[] = $order_id;
+                $existing_emails[] = $email; // no contar dos pedidos del mismo cliente en el mismo calculo
             }
 
-            error_log("[MRG] ajax_bulk_count: Filtrados a " . count($to_send_ids) . " destinatarios nuevos.");
             wp_send_json_success([
                 'count' => count($to_send_ids),
                 'ids' => $to_send_ids
