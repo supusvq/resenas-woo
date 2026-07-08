@@ -25,8 +25,22 @@ class InvitationsPage
             wp_send_json_error(__('No autorizado', 'mis-resenas-de-google'));
         }
 
-        global $wpdb;
-        $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_mrg_invitation_sent'");
+        // wc_get_orders() con meta_key/meta_value ya funciona igual con HPOS activado o no.
+        $order_ids = wc_get_orders([
+            'meta_key' => '_mrg_invitation_sent',
+            'meta_value' => 'yes',
+            'limit' => -1,
+            'return' => 'ids',
+        ]);
+
+        foreach ($order_ids as $order_id) {
+            $order = wc_get_order($order_id);
+            if ($order) {
+                $order->delete_meta_data('_mrg_invitation_sent');
+                $order->save();
+            }
+        }
+
         wp_send_json_success(__('Estados de envío limpiados en WooCommerce.', 'mis-resenas-de-google'));
     }
 
@@ -37,19 +51,34 @@ class InvitationsPage
             wp_send_json_error(__('No autorizado', 'mis-resenas-de-google'));
         }
 
-        global $wpdb;
-
-        // 1. Vaciar marcas actuales (Vaciar tabla visualmente de estados previos)
-        $wpdb->query("DELETE FROM {$wpdb->postmeta} WHERE meta_key = '_mrg_invitation_sent'");
+        // 1. Vaciar marcas actuales
+        $current_ids = wc_get_orders([
+            'meta_key' => '_mrg_invitation_sent',
+            'meta_value' => 'yes',
+            'limit' => -1,
+            'return' => 'ids',
+        ]);
+        foreach ($current_ids as $order_id) {
+            $order = wc_get_order($order_id);
+            if ($order) {
+                $order->delete_meta_data('_mrg_invitation_sent');
+                $order->save();
+            }
+        }
 
         // 2. Regenerar desde el historial
+        global $wpdb;
         $logs_table = $wpdb->prefix . 'mrg_email_logs';
         $sent_logs = $wpdb->get_results("SELECT order_id FROM $logs_table WHERE status = 'enviado'");
 
         $count = 0;
         foreach ($sent_logs as $log) {
-            update_post_meta($log->order_id, '_mrg_invitation_sent', 'yes');
-            $count++;
+            $order = wc_get_order($log->order_id);
+            if ($order) {
+                $order->update_meta_data('_mrg_invitation_sent', 'yes');
+                $order->save();
+                $count++;
+            }
         }
 
         wp_send_json_success(sprintf(__('Restauración completada: Se han sincronizado %d registros desde el historial.', 'mis-resenas-de-google'), $count));
@@ -149,7 +178,7 @@ class InvitationsPage
                     $attempts = $log->attempts;
                     $error = $log->error_message;
                 } else {
-                    $legacy_sent = get_post_meta($oid, '_mrg_invitation_sent', true);
+                    $legacy_sent = $order_obj->get_meta('_mrg_invitation_sent', true);
                     if ($legacy_sent === 'yes') {
                         $status = 'enviado';
                         $error = __('Sincronizado vía meta', 'mis-resenas-de-google');
