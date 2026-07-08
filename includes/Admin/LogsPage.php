@@ -312,10 +312,10 @@ class LogsPage
                 style="background:#fff; margin:10% auto; padding:25px; border-radius:12px; width:60%; max-width:800px; box-shadow:0 20px 40px rgba(0,0,0,0.2); position:relative; animation: mrgFadeIn 0.3s ease-out;">
                 <span id="mrg-close-modal"
                     style="position:absolute; right:20px; top:15px; font-size:28px; cursor:pointer; color:#999;">&times;</span>
-                <h2 style="margin-top:0; color:#1d2327; border-bottom:1px solid #eee; padding-bottom:15px;">' . esc_html__('Diagnóstico Técnico SMTP', 'mis-resenas-de-google') . '</h2>
+                <h2 style="margin-top:0; color:#1d2327; border-bottom:1px solid #eee; padding-bottom:15px;"><?php echo esc_html__('Diagnóstico Técnico SMTP', 'mis-resenas-de-google'); ?></h2>
                 <div style="margin-top:20px; max-height:400px; overflow-y:auto; background:#f6f7f7; padding:15px; border-radius:6px; border:1px solid #dcdcde; font-family:monospace; font-size:13px; line-height:1.6; white-space:pre-wrap; color:#3c434a;"
                     id="mrg-tech-content"></div>
-                <p style="margin-top:20px; font-size:12px; color:#646970; border-top:1px solid #eee; padding-top:15px;">' . esc_html__('Este es el mensaje bruto recibido del servidor.', 'mis-resenas-de-google') . '</p>
+                <p style="margin-top:20px; font-size:12px; color:#646970; border-top:1px solid #eee; padding-top:15px;"><?php echo esc_html__('Este es el mensaje bruto recibido del servidor.', 'mis-resenas-de-google'); ?></p>
             </div>
         </div>
 
