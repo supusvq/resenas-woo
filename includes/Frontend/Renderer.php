@@ -28,11 +28,7 @@ class Renderer
 
         if (false === $reviews) {
             $reviews = $repo->get_reviews($limit, $stars, true, $only_with_text);
-            $cache_duration = 1;
-            set_transient($transient_key, $reviews, $cache_duration * HOUR_IN_SECONDS);
-            error_log("[MRG] Reviews cached for $cache_duration hours");
-        } else {
-            error_log('[MRG] Reviews loaded from transient');
+            set_transient($transient_key, $reviews, HOUR_IN_SECONDS);
         }
 
         $avg = $repo->average_rating();
