@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.11.11
+Stable tag: 2.12.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,19 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.12.0 =
+* Fixed a bug that could send a duplicate review request email when a manual send raced with a pending scheduled cron send.
+* Added an atomic lock and re-check of automatic-request settings to the scheduled cron send, preventing duplicate or unwanted sends.
+* Declared compatibility with WooCommerce High-Performance Order Storage (HPOS) and migrated order meta reads/writes to the WooCommerce order API.
+* Fixed a broken confirmation/progress script on the invitations log page that could display raw PHP code to the admin.
+* Fixed the bulk invitation counter so calculating recipients no longer silently creates history records.
+* Test emails now log correctly on repeated sends instead of overwriting a single record.
+* Removed a global no-cache header on every page containing the reviews shortcode, and removed debug logging left in frontend rendering.
+* Review cache clearing now uses the transients API so it also works correctly with persistent object caches (Redis/Memcached).
+* Allowed the "only reviews with text" setting to be turned off once enabled.
+* Improved uninstall cleanup to remove scheduled cron events with arguments and HPOS order meta.
+* Improved invitations page performance for the default view by paginating the WooCommerce query instead of loading hundreds of orders per page load.
 
 = 2.11.11 =
 * Added a default-enabled setting to hide review avatars and avoid loading external Google profile images.
