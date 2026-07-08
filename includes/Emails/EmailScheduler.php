@@ -58,8 +58,23 @@ class EmailScheduler
             return false;
         }
 
-        $sender = new EmailSender();
         $logs = new EmailLogRepository();
+        $settings = get_option('mrg_settings', []);
+
+        if (!$is_manual) {
+            // Ruta cron: re-verificar que los envíos automáticos siguen activos (C4)
+            if (empty($settings['enable_review_requests'])) {
+                return false;
+            }
+
+            // Ruta cron: bloqueo atómico. Si el log ya está 'enviado' o hay otro proceso
+            // en curso, claim_for_send() devuelve false y no se envía nada (C1 + C2).
+            if (!$logs->claim_for_send($order_id)) {
+                return false;
+            }
+        }
+
+        $sender = new EmailSender();
         $result = $sender->send_for_order($order_id);
 
         if (is_wp_error($result)) {
@@ -71,7 +86,6 @@ class EmailScheduler
         }
 
         // DETERMINAR LA ETIQUETA SEGUN TU REQUISITO
-        $settings = get_option('mrg_settings', []);
         $delay_days = (int) ($settings['send_delay_days'] ?? 0);
 
         if ($is_manual) {
