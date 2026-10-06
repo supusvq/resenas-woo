@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.12.0
+Stable tag: 2.12.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -59,6 +59,9 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 2.12.1 =
+* Móvil: el bloque destacado de reseñas ya no desborda la pantalla (grid minmax(0, 1fr)).
 
 = 2.12.0 =
 * Fixed a bug that could send a duplicate review request email when a manual send raced with a pending scheduled cron send.
