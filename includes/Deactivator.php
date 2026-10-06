@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) {
 
 class Deactivator {
     public static function deactivate() {
-        // Sin limpieza automática.
+        // Sin limpieza de datos; solo se quita la importación semanal programada.
+        wp_clear_scheduled_hook('mrg_weekly_sync');
     }
 }
