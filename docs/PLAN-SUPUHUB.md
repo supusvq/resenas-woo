@@ -13,7 +13,7 @@ licencia; precio 49 €/año, 1 web, 15 días de prueba; Lara con licencia inter
 | 2. Plugin 3.0.0 (licencia, actualizaciones, migración segura) | ✅ Rama `v3-supuhub`, Codex aprobado, probado en el staging de Lara | `dist/resenas-woo-3.0.0.zip`, carpeta `resenas-woo` |
 | 3. El servicio comprueba la licencia | ✅ Producción 07/10 en `MRG_LICENSE_MODE=log` | `backend/license_gate.py`, token en `/etc/supu/google-reviews.env` |
 | 4. Alta comercial en SupuHub | ✅ Producción LIVE 07/10 | Versión 3.0.1 publicada en staging y producción; plan `annual` 49 €/año, 15 días de prueba; enlace LIVE `https://buy.stripe.com/9B67sLclbcSlddL3GRcIE04` (= `License::BUY_URL`) |
-| 5. Migrar las webs y activar el bloqueo | Pendiente | Lara + clientes; después `MRG_LICENSE_MODE=enforce` |
+| 5. Migrar las webs y activar el bloqueo | 🟡 En curso: 3.0.1 instalada en Lara producción y en Rayas y Lunares (07/10); faltan sus licencias | Lara + clientes; después `MRG_LICENSE_MODE=enforce` |
 
 ## Fase 4 (cerrada el 07/10)
 
@@ -37,7 +37,16 @@ Comando: `SUPUHUB_SSH_KEY=~/.ssh/id_ed25519 bash <supuhub>/tools/supuhub-release
 5. Sustituir `License::BUY_URL` (hoy `https://supudigital.es/resenas-woo/`, provisional) por el
    enlace de pago que devuelva el kit.
 
-## Fase 5 (siguiente)
+## Fase 5 (en curso)
+
+Estado al 07/10/2026:
+- **Lara producción**: 3.0.1 activa, 2.12.3 inactiva y neutralizada, 6 reseñas intactas, portada OK.
+  Copia en `~/backups/resenas-v3-prod-20261007-1422/` (plugin 2.12.3, tablas en JSON, opciones).
+  Falta: Juan crea en el panel la licencia **vitalicia** (1 dominio) y la activa en Reseñas Woo > Licencia.
+- **Rayas y Lunares** (único cliente con Reseñas Woo): 3.0.1 instalada por Juan. Falta decidir si la
+  licencia es regalada o de pago (enlace LIVE). Sin licencia no importa (tampoco los miércoles).
+- Después: comprobar que ningún dominio legítimo sale con `would_block=1` y pasar a `enforce`.
+
 
 El staging de Lara apunta al SupuHub de STAGING (`SUPUHUB_API_BASE` en su wp-config). Quitar esa
 línea si se quiere probar contra producción.
