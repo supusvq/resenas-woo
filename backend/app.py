@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -140,12 +141,14 @@ def import_reviews(payload: ImportRequest, request: Request):
     try:
         # Toda petición cuenta para el límite por IP y hora, sea cual sea el proveedor o el resultado.
         guard = AccessGuard()
-        guard.admit(ip, guard.site_key(payload.site_url, ip), ReviewsCache().place_key(str(payload.maps_url)))
+        guard.admit(ip, guard.site_key(payload.site_url, ip), ReviewsCache.place_key(str(payload.maps_url)))
         return service.import_reviews(payload, ip=ip)
     except LimitExceeded as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
-    except GuardBusy as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "3600"}) from exc
+    except (GuardBusy, sqlite3.OperationalError) as exc:
+        raise HTTPException(
+            status_code=503, detail="Servicio ocupado, reintenta en unos minutos.", headers={"Retry-After": "120"}
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

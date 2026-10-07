@@ -20,7 +20,8 @@ class ReviewsCache:
         self.db_path = os.getenv("MRG_SAAS_DB_PATH", "mrg_saas.sqlite3")
         self._ensure_schema()
 
-    def place_key(self, maps_url: str) -> str:
+    @staticmethod
+    def place_key(maps_url: str) -> str:
         url = str(maps_url).strip().lower()
         fid = re.search(r"!1s(0x[0-9a-f]+:0x[0-9a-f]+)", url)
         if fid:

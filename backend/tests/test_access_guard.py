@@ -55,6 +55,17 @@ def test_live_limits():
     expect_limit(lambda: svc.import_reviews(req(7, "https://cliente-c.es"), ip="3.3.3.3"), "global")
 
 
+def test_no_bloquear_a_otra_web():
+    os.environ["MRG_SAAS_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "d.sqlite3")
+    g = AccessGuard()
+    # Un tercero declara el dominio de la víctima y agota «su» cupo…
+    g.reserve_live("6.6.6.6", "victima.es", "a")
+    g.reserve_live("6.6.6.6", "victima.es", "b")
+    expect_limit(lambda: g.reserve_live("6.6.6.6", "victima.es", "c"), "atacante")
+    # …pero la víctima, desde su IP, sigue pudiendo importar.
+    g.reserve_live("5.5.5.5", "victima.es", "d")
+
+
 def test_admit_per_ip_hour():
     g = AccessGuard()
     for _ in range(5):
@@ -64,7 +75,7 @@ def test_admit_per_ip_hour():
 
 
 def test_concurrent_reservations():
-    # Base nueva: 20 hilos reservan a la vez; nunca más que el tope por web (2).
+    # Base nueva: 20 hilos (IPs distintas) reservan a la vez; nunca más que el tope global (4).
     os.environ["MRG_SAAS_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "c.sqlite3")
     g = AccessGuard()
     ok, lock = [], threading.Lock()
@@ -80,7 +91,7 @@ def test_concurrent_reservations():
     threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
     [t.start() for t in threads]
     [t.join() for t in threads]
-    assert len(ok) == 2, ok
+    assert len(ok) == 4, ok
     del g
 
 
@@ -88,5 +99,6 @@ if __name__ == "__main__":
     test_site_key()
     test_live_limits()
     test_admit_per_ip_hour()
+    test_no_bloquear_a_otra_web()
     test_concurrent_reservations()
     print("OK: dominio normalizado, límites por web/IP/global, por IP y hora, y reservas atómicas en concurrencia")

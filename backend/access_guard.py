@@ -27,8 +27,9 @@ class AccessGuard:
       también en una transacción atómica: por web, por IP y total diario;
     - una reserva cuenta aunque el scrape falle o el proceso se caiga (se prefiere contar de más).
 
-    La «web» la declara el cliente (site_url) y no está verificada: por eso también se limita
-    por IP. La identidad verificada llegará con la licencia de SupuHub.
+    La «web» la declara el cliente (site_url) y no está verificada: por eso el cupo por web se cuenta
+    junto a la IP y hay topes por IP y global. Riesgo aceptado hasta SupuHub: muchas IPs podrían agotar
+    el tope global (freno de emergencia del gasto). La identidad verificada llegará con la licencia.
 
     Los valores se cambian con variables de entorno sin tocar el código.
     """
@@ -39,7 +40,10 @@ class AccessGuard:
         self.live_per_site_day = int(os.getenv("MRG_LIMIT_LIVE_PER_SITE_DAY", "3"))
         self.live_per_ip_day = int(os.getenv("MRG_LIMIT_LIVE_PER_IP_DAY", "6"))
         self.live_global_day = int(os.getenv("MRG_LIMIT_LIVE_GLOBAL_DAY", "40"))
-        self._ensure_schema()
+        try:
+            self._ensure_schema()
+        except sqlite3.OperationalError as exc:
+            raise GuardBusy("Servicio ocupado, reintenta en unos segundos.") from exc
 
     @staticmethod
     def site_key(site_url: Optional[str], ip: str) -> str:
@@ -68,7 +72,9 @@ class AccessGuard:
         out = {}
 
         def check(conn: sqlite3.Connection) -> None:
-            if self._count(conn, "kind = 'live' AND site = ? AND ts > ?", (site, since)) >= self.live_per_site_day:
+            # Por (web, IP): el dominio lo declara el cliente; contarlo junto a la IP impide que un tercero
+            # agote el cupo de otra web. El gasto real lo acotan los topes por IP y global.
+            if self._count(conn, "kind = 'live' AND site = ? AND ip = ? AND ts > ?", (site, ip, since)) >= self.live_per_site_day:
                 raise LimitExceeded("Esta web ya ha importado reseñas hoy. Prueba mañana.")
             if self._count(conn, "kind = 'live' AND ip = ? AND ts > ?", (ip, since)) >= self.live_per_ip_day:
                 raise LimitExceeded("Demasiadas importaciones desde esta IP hoy. Prueba mañana.")

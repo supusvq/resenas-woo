@@ -9,5 +9,6 @@ class Deactivator {
     public static function deactivate() {
         // Sin limpieza de datos; solo se quita la importación semanal programada.
         wp_clear_scheduled_hook('mrg_weekly_sync');
+        wp_unschedule_hook('mrg_weekly_sync_retry');
     }
 }
