@@ -83,8 +83,12 @@ Comportamiento:
 - Orden: cada resultado se guarda con la hora en que se envió la consulta y solo pisa la fila si es
   más nuevo. Un «no válida» borra la última validez (sin gracia) y la gracia se decide releyendo la
   fila tras el fallo. Si un «no válida» no se puede guardar en SQLite (3 intentos), el proceso lo
-  recuerda en memoria: 15 min como no válida y sin gracia de positivos anteriores (por proceso; el
-  servicio corre con un solo worker).
+  recuerda en memoria: 15 min como no válida y sin gracia de positivos anteriores.
+- **Un solo worker.** El servicio corre con un único worker de uvicorn (unidad systemd). Toda la
+  decisión de un dominio (caché → SupuHub → guardar → decidir) va bajo un candado en memoria por
+  dominio, y la respuesta final sale de releer lo guardado. **No añadir `--workers`** sin antes
+  cambiar ese candado por uno entre procesos (un `BEGIN IMMEDIATE` de SQLite que abarque la
+  decisión o un archivo de bloqueo); la marca de negativos sin guardar también es por proceso.
 
 ### Copiar el token al .env sin mostrarlo
 

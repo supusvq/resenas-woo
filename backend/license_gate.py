@@ -15,8 +15,15 @@ no responde (red, timeout, 5xx o 429) se reutiliza el último resultado VÁLIDO 
 («gracia»). Un 3xx/400/401/403 de SupuHub es un error de configuración: nunca se guarda como veredicto.
 
 Orden y concurrencia:
-- checked_at es la hora en que se ENVIÓ la consulta. Un resultado solo sobrescribe la fila si su
-  checked_at es >= el guardado: una respuesta lenta no pisa un veredicto más nuevo.
+- SUPUESTO: el servicio corre con UN SOLO worker de uvicorn (verificado en la unidad systemd).
+  Toda la decisión de un dominio (leer caché y marca → consultar SupuHub → guardar → decidir) va
+  dentro de un candado en memoria por dominio, así que dos peticiones del mismo dominio no se
+  entrelazan. Si algún día se añade --workers, haría falta un candado entre procesos (por ejemplo
+  un BEGIN IMMEDIATE de SQLite que abarque la decisión, o un archivo de bloqueo).
+- La decisión final se toma RELEYENDO la fila guardada (y la marca) tras guardar, nunca solo con la
+  respuesta local: si la escritura se descartó por haber un veredicto más nuevo, manda ese.
+- Defensa adicional: checked_at es la hora en que se ENVIÓ la consulta. Un resultado solo sobrescribe
+  la fila si su checked_at es >= el guardado: una respuesta lenta no pisa un veredicto más nuevo.
 - Un «no válida» borra last_valid_at en la misma escritura: tras él no hay gracia.
 - La gracia se decide releyendo la fila DESPUÉS del fallo de SupuHub, no con la copia de antes.
 - Si un «no válida» no se puede guardar (tras varios intentos), queda una marca en memoria del
@@ -31,6 +38,7 @@ import os
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -59,6 +67,33 @@ MODES = ("off", "log", "enforce")
 # Negativos que no se pudieron guardar en SQLite: dominio -> checked_at del negativo.
 _NEGATIVOS_PENDIENTES: Dict[str, float] = {}
 _NEGATIVOS_LOCK = threading.Lock()
+
+# Candados por dominio (un solo worker: ver cabecera). Solo existen mientras alguien los usa,
+# así que el diccionario no crece sin límite: como mucho, tantas entradas como peticiones en curso.
+_CANDADOS: Dict[str, list] = {}  # dominio -> [threading.Lock, usuarios]
+_CANDADOS_LOCK = threading.Lock()
+CANDADO_TIMEOUT = 30.0
+
+
+@contextmanager
+def _candado_dominio(domain: str):
+    with _CANDADOS_LOCK:
+        entry = _CANDADOS.get(domain)
+        if entry is None:
+            entry = _CANDADOS[domain] = [threading.Lock(), 0]
+        entry[1] += 1
+    try:
+        if not entry[0].acquire(timeout=CANDADO_TIMEOUT):
+            raise GuardBusy("Comprobación de licencia ocupada para este dominio.")
+        try:
+            yield
+        finally:
+            entry[0].release()
+    finally:
+        with _CANDADOS_LOCK:
+            entry[1] -= 1
+            if entry[1] == 0 and _CANDADOS.get(domain) is entry:
+                del _CANDADOS[domain]
 
 
 def license_mode() -> str:
@@ -152,6 +187,11 @@ class LicenseGate:
             return self._unavailable("url_no_https")
 
         self._ensure_schema()
+        # Toda la decisión del dominio, serializada (leer → SupuHub → guardar → decidir).
+        with _candado_dominio(domain):
+            return self._verdict_locked(domain)
+
+    def _verdict_locked(self, domain: str) -> Decision:
         now = self.clock()
 
         neg = self._negativo_pendiente(domain)
@@ -206,14 +246,29 @@ class LicenseGate:
         else:
             reason = str(data.get("reason") or ("otro_producto" if data["valid"] else "no_valida"))[:60]
         self._cache_store(domain, valid, reason, sent_at)
+        return self._stored_decision(domain, valid, reason)
+
+    def _stored_decision(self, domain: str, valid: bool, reason: str) -> Decision:
+        """Decide con lo GUARDADO tras guardar: si la escritura se descartó, manda el veredicto más nuevo."""
+        neg = self._negativo_pendiente(domain)
+        row = self._cache_row(domain)
+        if neg is not None and not (row and float(row[2] or 0) > neg):
+            return self._deny(False, "no_valida_sin_guardar", "supuhub")
+        if row:
+            if int(row[0] or 0) == 1:
+                return Decision(True, True, str(row[1] or reason), "supuhub")
+            return self._deny(False, str(row[1] or reason), "supuhub")
+        # Sin fila ni marca: el positivo no se pudo guardar y nada lo contradice.
         return Decision(True, True, reason, "supuhub") if valid else self._deny(False, reason, "supuhub")
 
     def _grace(self, domain: str, why: str) -> Decision:
         # Se relee la fila AHORA: otra petición puede haber guardado un negativo mientras esperábamos.
+        # Primero la marca y después la fila: un negativo se marca antes de guardarse y la marca se
+        # borra después, así que en este orden nunca se ve «sin marca» con la fila positiva antigua.
+        neg = self._negativo_pendiente(domain)
         row = self._cache_row(domain)
         if row and int(row[0] or 0) == 1 and row[3]:
             last_valid_at = float(row[3])
-            neg = self._negativo_pendiente(domain)
             if (neg is None or last_valid_at > neg) and self.clock() - last_valid_at < GRACE_TTL:
                 return Decision(True, True, "gracia_" + why, "grace")
         return self._unavailable(why)

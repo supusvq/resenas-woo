@@ -468,36 +468,117 @@ def en_hilo(fn, out):
     return t
 
 
-def test_positivo_tardio_no_pisa_negativo_nuevo():
+class Escritor:
+    """Stub que, mientras «espera» a SupuHub, simula que otro escritor guarda un veredicto más nuevo."""
+
+    def __init__(self, respuesta, accion):
+        self.respuesta, self.accion = respuesta, accion
+
+    def __call__(self, url, json, headers, timeout, **kw):
+        self.accion()
+        return self.respuesta
+
+
+def test_escritura_descartada_decide_con_lo_guardado():
+    # Codex 1: el UPSERT descarta el positivo (hay un negativo más nuevo) → la decisión es «no válida».
     p = entorno("enforce")
     try:
-        lento, out = Lento(OK), {}
-        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(100.0)).check("carrera.es"), out)
-        assert lento.dentro.wait(10)
-        assert not LicenseGate(http_post=Stub(NO), clock=Clock(200.0)).check("carrera.es").allowed
-        lento.seguir.set()
-        a.join()
-        row = cache_row("carrera.es")
-        assert row[0] == 0 and row[1] == 200.0 and row[2] is None, row
-        # Y la caché sigue diciendo «no válida».
-        d = LicenseGate(http_post=Stub(OK), clock=Clock(300.0)).check("carrera.es")
-        assert not d.allowed and d.source == "cache"
+        LicenseGate(http_post=Stub(OK)).check("x.es")  # esquema
+
+        def negativo_nuevo():
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"], isolation_level=None)
+            conn.execute(
+                "INSERT INTO mrg_license_cache (domain, valid, reason, checked_at, last_valid_at) "
+                "VALUES ('descartada.es', 0, 'revocada', 500.0, NULL)"
+            )
+            conn.close()
+
+        d = LicenseGate(http_post=Escritor(OK, negativo_nuevo), clock=Clock(100.0)).check("descartada.es")
+        assert not d.allowed and d.valid is False and d.reason == "revocada", d
+        row = cache_row("descartada.es")
+        assert row[0] == 0 and row[1] == 500.0 and row[2] is None, row
+
+        # Igual con la marca en memoria de un negativo más nuevo que no se pudo guardar.
+        def marca():
+            license_gate._NEGATIVOS_PENDIENTES["marcada.es"] = 500.0
+
+        d = LicenseGate(http_post=Escritor(OK, marca), clock=Clock(100.0)).check("marcada.es")
+        assert not d.allowed and d.reason == "no_valida_sin_guardar", d
+        license_gate._NEGATIVOS_PENDIENTES.pop("marcada.es", None)
     finally:
         p.stop()
 
 
-def test_gracia_relee_la_fila_tras_el_fallo():
+def bloqueado(stub_b, segundos=0.3):
+    """True si el hilo B no ha llegado a llamar a SupuHub en ese tiempo (espera al candado)."""
+    t_fin = threading.Event()
+    t_fin.wait(segundos)
+    return stub_b.calls == []
+
+
+def test_carrera_positivo_lento_y_negativo():
+    # Codex 1 con hilos: A (positivo lento) y B (negativo) a la vez sobre el mismo dominio.
+    p = entorno("enforce")
+    try:
+        lento, sa, sb = Lento(OK), {}, {}
+        stub_b = Stub(NO)
+        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(100.0)).check("carrera.es"), sa)
+        assert lento.dentro.wait(10)
+        tb = 100.0 + VALID_TTL + 1  # B llega con la caché de A ya caducada
+        b = en_hilo(lambda: LicenseGate(http_post=stub_b, clock=Clock(tb)).check("carrera.es"), sb)
+        assert bloqueado(stub_b), "B no debía consultar SupuHub mientras A decide"
+        lento.seguir.set()
+        a.join()
+        b.join()
+        assert sa["a"].allowed and not sb["a"].allowed
+        row = cache_row("carrera.es")
+        assert row[0] == 0 and row[1] == tb and row[2] is None, row
+        d = LicenseGate(http_post=Stub(OK), clock=Clock(tb + 60)).check("carrera.es")
+        assert not d.allowed and d.source == "cache"
+        assert license_gate._CANDADOS == {}, "los candados deben liberarse"
+    finally:
+        p.stop()
+
+
+def test_carrera_gracia_y_negativo():
+    # Codex 2 con hilos: A cae en gracia con un positivo antiguo mientras B guarda un negativo.
     p = entorno("enforce")
     try:
         LicenseGate(http_post=Stub(OK), clock=Clock(1000.0)).check("relee.es")
         t = 1000.0 + VALID_TTL + 1  # caché caducada: las dos peticiones van a SupuHub
-        lento, out = Lento(ConnectionError("caído")), {}
-        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(t)).check("relee.es"), out)
+        lento, sa, sb = Lento(ConnectionError("caído")), {}, {}
+        stub_b = Stub(NO)
+        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(t)).check("relee.es"), sa)
         assert lento.dentro.wait(10)  # A ya leyó la fila positiva antigua
-        assert not LicenseGate(http_post=Stub(NO), clock=Clock(t + 1)).check("relee.es").allowed
+        b = en_hilo(lambda: LicenseGate(http_post=stub_b, clock=Clock(t + 1)).check("relee.es"), sb)
+        assert bloqueado(stub_b), "B no debía guardar el negativo mientras A decide la gracia"
         lento.seguir.set()
         a.join()
-        assert not out["a"].allowed and out["a"].source == "error", out["a"]
+        b.join()
+        # A decidió antes que existiera el negativo; B lo guarda después y desde ahí no hay gracia.
+        assert sa["a"].source == "grace" and not sb["a"].allowed
+        d = LicenseGate(http_post=Stub(Resp(500)), clock=Clock(t + INVALID_TTL + 2)).check("relee.es")
+        assert not d.allowed and d.source == "error", d
+        # La gracia lee la marca antes que la fila: con un negativo marcado no hay gracia.
+        LicenseGate(http_post=Stub(OK), clock=Clock(t + INVALID_TTL + 3)).check("marca.es")
+        license_gate._NEGATIVOS_PENDIENTES["marca.es"] = t + INVALID_TTL + 4
+        d = LicenseGate(http_post=Stub(Resp(500)), clock=Clock(t + 2 * INVALID_TTL + 10)).check("marca.es")
+        assert not d.allowed, d
+        license_gate._NEGATIVOS_PENDIENTES.pop("marca.es", None)
+    finally:
+        p.stop()
+
+
+def test_dominios_distintos_no_se_esperan():
+    p = entorno("enforce")
+    try:
+        lento, sa = Lento(OK), {}
+        a = en_hilo(lambda: LicenseGate(http_post=lento).check("uno.es"), sa)
+        assert lento.dentro.wait(10)
+        assert LicenseGate(http_post=Stub(OK)).check("dos.es").allowed  # no se queda esperando
+        lento.seguir.set()
+        a.join()
+        assert sa["a"].allowed and license_gate._CANDADOS == {}
     finally:
         p.stop()
 
