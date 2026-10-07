@@ -18,6 +18,7 @@ os.environ.pop("MRG_LICENSE_MODE", None)
 import sqlite3  # noqa: E402
 
 import license_gate  # noqa: E402
+from access_guard import GuardBusy  # noqa: E402
 from license_gate import (  # noqa: E402
     GRACE_TTL, INVALID_TTL, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
 )
@@ -44,9 +45,10 @@ class Stub:
         self.calls = []
         self.lock = threading.Lock()
 
-    def __call__(self, url, json, headers, timeout):
+    def __call__(self, url, json, headers, timeout, **kw):
         with self.lock:
             self.calls.append((url, json, headers, timeout))
+            self.kwargs = kw
             r = self.respuestas.pop(0) if len(self.respuestas) > 1 else self.respuestas[0]
         if isinstance(r, Exception):
             raise r
@@ -128,6 +130,7 @@ def test_peticion_a_supuhub():
         assert body == {"product_code": "resenaswoo", "domain": "cliente.es"}
         assert headers["X-Service-Token"] == "tok-secreto"
         assert timeout == 8.0
+        assert stub.kwargs.get("allow_redirects") is False, "el token no debe seguir redirecciones"
         assert LicenseGate.normalize("www.Ñandú.es") == "xn--and-6ma2c.es"
     finally:
         p.stop()
@@ -364,6 +367,184 @@ def test_endpoint():
         assert any(s == "pirata2.es" and "would_block=1" in o for s, _, o in log_rows())
     finally:
         p.stop()
+
+
+
+# ---------------------------------------------------------------- regresiones de la revisión de Codex
+
+
+def cache_row(domain):
+    conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+    try:
+        return conn.execute(
+            "SELECT valid, checked_at, last_valid_at FROM mrg_license_cache WHERE domain = ?", (domain,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+def test_error_interno_no_bloquea_en_log():
+    # 1) SQLite bloqueada de verdad: log deja pasar; enforce da 503 (nunca una excepción sin controlar).
+    for mode in ("log", "enforce"):
+        p = entorno(mode, MRG_SQLITE_TIMEOUT="0.2")
+        try:
+            LicenseGate(http_post=Stub(OK)).check("x.es")  # crea el esquema
+            lock = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"], isolation_level=None)
+            lock.execute("BEGIN EXCLUSIVE")
+            try:
+                g = LicenseGate(http_post=Stub(OK))
+                if mode == "log":
+                    d = g.authorize("bloqueo.es", "k", "1.1.1.1")
+                    assert d.allowed and d.reason == "error_interno", d
+                    assert g.check("bloqueo2.es").allowed
+                else:
+                    e = denied(lambda: g.authorize("bloqueo.es", "k", "1.1.1.1"))
+                    assert e.status_code == 503 and e.reason == "error_interno"
+                    assert g.check("bloqueo2.es").status_code == 503
+            finally:
+                lock.rollback()
+                lock.close()
+        finally:
+            p.stop()
+    # 2) Fallo al vincular la ficha: queda anotado como error_interno.
+    p = entorno("log")
+    try:
+        with patch.object(LicenseGate, "bind_place", side_effect=GuardBusy("ocupado")):
+            d = LicenseGate(http_post=Stub(OK)).authorize("ficha.es", "k", "1.1.1.1")
+        assert d.allowed
+        last = log_rows()[-1][2]
+        assert "reason=error_interno" in last and "would_block=1" in last, last
+        # Variable mal escrita: tampoco rompe.
+        os.environ["MRG_MAX_PLACES_PER_DOMAIN"] = "tres"
+        assert LicenseGate(http_post=Stub(OK)).max_places == 3
+    finally:
+        p.stop()
+
+
+def test_negativo_sin_guardar_no_deja_gracia():
+    p = entorno("enforce")
+    try:
+        t0 = 1_900_000_000.0
+        LicenseGate(http_post=Stub(OK), clock=Clock(t0)).check("neg.es")
+        t1 = t0 + VALID_TTL + 1
+        with patch.object(LicenseGate, "_atomic", side_effect=GuardBusy("ocupado")):
+            d = LicenseGate(http_post=Stub(NO), clock=Clock(t1)).check("neg.es")
+        assert not d.allowed and d.valid is False
+        assert cache_row("neg.es")[0] == 1, "la escritura debía haber fallado"
+        # Dentro de 15 min: no válida sin preguntar a SupuHub.
+        stub = Stub(OK)
+        d = LicenseGate(http_post=stub, clock=Clock(t1 + 60)).check("neg.es")
+        assert not d.allowed and d.reason == "no_valida_sin_guardar" and stub.calls == []
+        # Después, SupuHub caído: el positivo antiguo NO da gracia.
+        d = LicenseGate(http_post=Stub(Resp(500)), clock=Clock(t1 + INVALID_TTL + 1)).check("neg.es")
+        assert not d.allowed and d.source == "error", d
+        # Un positivo nuevo guardado con éxito borra la marca.
+        assert LicenseGate(http_post=Stub(OK), clock=Clock(t1 + INVALID_TTL + 2)).check("neg.es").allowed
+        d = LicenseGate(http_post=Stub(Resp(500)), clock=Clock(t1 + INVALID_TTL + 3 + VALID_TTL)).check("neg.es")
+        assert d.source == "grace", d
+    finally:
+        p.stop()
+
+
+class Lento:
+    """Stub que espera a una señal antes de responder (o fallar)."""
+
+    def __init__(self, respuesta):
+        self.respuesta = respuesta
+        self.dentro = threading.Event()
+        self.seguir = threading.Event()
+
+    def __call__(self, url, json, headers, timeout, **kw):
+        self.dentro.set()
+        assert self.seguir.wait(10)
+        if isinstance(self.respuesta, Exception):
+            raise self.respuesta
+        return self.respuesta
+
+
+def en_hilo(fn, out):
+    t = threading.Thread(target=lambda: out.setdefault("a", fn()))
+    t.start()
+    return t
+
+
+def test_positivo_tardio_no_pisa_negativo_nuevo():
+    p = entorno("enforce")
+    try:
+        lento, out = Lento(OK), {}
+        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(100.0)).check("carrera.es"), out)
+        assert lento.dentro.wait(10)
+        assert not LicenseGate(http_post=Stub(NO), clock=Clock(200.0)).check("carrera.es").allowed
+        lento.seguir.set()
+        a.join()
+        row = cache_row("carrera.es")
+        assert row[0] == 0 and row[1] == 200.0 and row[2] is None, row
+        # Y la caché sigue diciendo «no válida».
+        d = LicenseGate(http_post=Stub(OK), clock=Clock(300.0)).check("carrera.es")
+        assert not d.allowed and d.source == "cache"
+    finally:
+        p.stop()
+
+
+def test_gracia_relee_la_fila_tras_el_fallo():
+    p = entorno("enforce")
+    try:
+        LicenseGate(http_post=Stub(OK), clock=Clock(1000.0)).check("relee.es")
+        t = 1000.0 + VALID_TTL + 1  # caché caducada: las dos peticiones van a SupuHub
+        lento, out = Lento(ConnectionError("caído")), {}
+        a = en_hilo(lambda: LicenseGate(http_post=lento, clock=Clock(t)).check("relee.es"), out)
+        assert lento.dentro.wait(10)  # A ya leyó la fila positiva antigua
+        assert not LicenseGate(http_post=Stub(NO), clock=Clock(t + 1)).check("relee.es").allowed
+        lento.seguir.set()
+        a.join()
+        assert not out["a"].allowed and out["a"].source == "error", out["a"]
+    finally:
+        p.stop()
+
+
+def test_redirecciones_y_url_sin_https():
+    for mode in ("enforce", "log"):
+        p = entorno(mode)
+        try:
+            stub = Stub(Resp(302))
+            g = LicenseGate(http_post=stub)
+            d1, d2 = g.check("redir.es"), g.check("redir.es")
+            assert len(stub.calls) == 2 and d1.reason == "supuhub_302" and d1.source == "error"
+            assert d1.allowed == (mode == "log") and (mode == "log" or d1.status_code == 503)
+            assert cache_row("redir.es") is None
+        finally:
+            p.stop()
+    p = entorno("enforce", MRG_SUPUHUB_VERIFY_URL="http://api.supudigital.es/api/license/verify.php")
+    try:
+        stub = Stub(OK)
+        d = LicenseGate(http_post=stub).check("http.es")
+        assert not d.allowed and d.reason == "url_no_https" and d.status_code == 503 and stub.calls == []
+    finally:
+        p.stop()
+
+
+def test_endpoint_error_interno():
+    import app as app_module
+
+    try:
+        from fastapi.testclient import TestClient
+    except Exception:
+        print("  (sin TestClient: se omite)")
+        return
+    body = {"maps_url": "https://www.google.com/maps/place/negocio-err", "site_url": "https://err.es"}
+    for mode, esperado in (("log", 200), ("enforce", 503)):
+        p = entorno(mode)
+        try:
+            c = TestClient(app_module.app)
+            fallo = sqlite3.OperationalError("database is locked")
+            with patch.object(license_gate, "_requests_post", Stub(OK)), \
+                    patch.object(LicenseGate, "bind_place", side_effect=fallo):
+                r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "9.9.1.1"})
+            assert r.status_code == esperado, (mode, r.status_code, r.text)
+            if esperado == 503:
+                assert r.headers.get("retry-after")
+        finally:
+            p.stop()
 
 
 if __name__ == "__main__":

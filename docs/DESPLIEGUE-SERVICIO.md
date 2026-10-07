@@ -76,6 +76,15 @@ Comportamiento:
   Para liberar fichas de un cliente que ha cambiado de negocio:
   `sqlite3 "$DB" "DELETE FROM mrg_license_places WHERE domain='cliente.es';"`
 - `GET /health` incluye `license_mode` (nunca el token).
+- Errores internos (SQLite ocupada, fallo inesperado): en `log` nunca bloquean (se anota
+  `reason=error_interno`); en `enforce` dan 503 con `Retry-After`, nunca 500.
+- El token no sigue redirecciones: un 3xx de SupuHub cuenta como error de configuración. Si
+  `MRG_SUPUHUB_VERIFY_URL` no empieza por `https://` no se envía nada (`reason=url_no_https`).
+- Orden: cada resultado se guarda con la hora en que se envió la consulta y solo pisa la fila si es
+  más nuevo. Un «no válida» borra la última validez (sin gracia) y la gracia se decide releyendo la
+  fila tras el fallo. Si un «no válida» no se puede guardar en SQLite (3 intentos), el proceso lo
+  recuerda en memoria: 15 min como no válida y sin gracia de positivos anteriores (por proceso; el
+  servicio corre con un solo worker).
 
 ### Copiar el token al .env sin mostrarlo
 
