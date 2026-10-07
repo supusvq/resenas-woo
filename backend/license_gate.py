@@ -246,19 +246,24 @@ class LicenseGate:
         else:
             reason = str(data.get("reason") or ("otro_producto" if data["valid"] else "no_valida"))[:60]
         self._cache_store(domain, valid, reason, sent_at)
-        return self._stored_decision(domain, valid, reason)
+        return self._stored_decision(domain, valid, reason, sent_at)
 
-    def _stored_decision(self, domain: str, valid: bool, reason: str) -> Decision:
-        """Decide con lo GUARDADO tras guardar: si la escritura se descartó, manda el veredicto más nuevo."""
+    def _stored_decision(self, domain: str, valid: bool, reason: str, sent_at: float) -> Decision:
+        """Decide tras guardar. Solo un veredicto MÁS NUEVO que esta consulta puede contradecirla.
+
+        - Marca de negativo sin guardar más nueva que esta consulta (y sin fila posterior a ella): no válida.
+        - Fila guardada más nueva que esta consulta (el UPSERT descartó la nuestra): manda la fila.
+        - Fila igual o más antigua, o escritura fallida: manda esta respuesta, que es la más fresca.
+        """
         neg = self._negativo_pendiente(domain)
         row = self._cache_row(domain)
-        if neg is not None and not (row and float(row[2] or 0) > neg):
+        row_at = float(row[2] or 0) if row else None
+        if neg is not None and neg > sent_at and not (row_at is not None and row_at > neg):
             return self._deny(False, "no_valida_sin_guardar", "supuhub")
-        if row:
+        if row_at is not None and row_at > sent_at:
             if int(row[0] or 0) == 1:
                 return Decision(True, True, str(row[1] or reason), "supuhub")
             return self._deny(False, str(row[1] or reason), "supuhub")
-        # Sin fila ni marca: el positivo no se pudo guardar y nada lo contradice.
         return Decision(True, True, reason, "supuhub") if valid else self._deny(False, reason, "supuhub")
 
     def _grace(self, domain: str, why: str) -> Decision:

@@ -509,6 +509,43 @@ def test_escritura_descartada_decide_con_lo_guardado():
         p.stop()
 
 
+def test_escritura_fallida_usa_la_respuesta_fresca():
+    # Repro de Codex: negativo antiguo guardado → SupuHub dice válida → no se puede guardar → debe pasar.
+    p = entorno("enforce")
+    try:
+        t0 = 2_000_000_000.0
+        LicenseGate(http_post=Stub(NO), clock=Clock(t0)).check("fresca.es")
+        t1 = t0 + INVALID_TTL + 1
+        with patch.object(LicenseGate, "_atomic", side_effect=GuardBusy("ocupado")):
+            d = LicenseGate(http_post=Stub(OK), clock=Clock(t1)).check("fresca.es")
+        assert d.allowed and d.valid and d.source == "supuhub", d
+        assert cache_row("fresca.es")[0] == 0, "la escritura debía haber fallado"
+
+        # Inverso: positivo antiguo guardado → SupuHub dice NO válida → no se puede guardar → bloquea.
+        LicenseGate(http_post=Stub(OK), clock=Clock(t0)).check("fresca2.es")
+        t2 = t0 + VALID_TTL + 1
+        with patch.object(LicenseGate, "_atomic", side_effect=GuardBusy("ocupado")):
+            d = LicenseGate(http_post=Stub(NO), clock=Clock(t2)).check("fresca2.es")
+        assert not d.allowed and d.valid is False, d
+        assert cache_row("fresca2.es")[0] == 1
+        license_gate._NEGATIVOS_PENDIENTES.pop("fresca2.es", None)
+
+        # Inverso del descarte: un positivo guardado MÁS NUEVO que esta consulta negativa manda.
+        def positivo_nuevo():
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"], isolation_level=None)
+            conn.execute(
+                "INSERT INTO mrg_license_cache (domain, valid, reason, checked_at, last_valid_at) "
+                "VALUES ('nuevo-pos.es', 1, 'active', 500.0, 500.0)"
+            )
+            conn.close()
+
+        d = LicenseGate(http_post=Escritor(NO, positivo_nuevo), clock=Clock(100.0)).check("nuevo-pos.es")
+        assert d.allowed and d.reason == "active", d
+        license_gate._NEGATIVOS_PENDIENTES.pop("nuevo-pos.es", None)
+    finally:
+        p.stop()
+
+
 def bloqueado(stub_b, segundos=0.3):
     """True si el hilo B no ha llegado a llamar a SupuHub en ese tiempo (espera al candado)."""
     t_fin = threading.Event()
