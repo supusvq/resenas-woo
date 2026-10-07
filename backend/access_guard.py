@@ -144,4 +144,5 @@ class AccessGuard:
 
     def _connect(self) -> sqlite3.Connection:
         # isolation_level=None: las transacciones las abre BEGIN IMMEDIATE de forma explícita.
-        return sqlite3.connect(self.db_path, timeout=10, isolation_level=None)
+        timeout = float(os.getenv("MRG_SQLITE_TIMEOUT", "10"))
+        return sqlite3.connect(self.db_path, timeout=timeout, isolation_level=None)

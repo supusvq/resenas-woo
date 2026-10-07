@@ -16,7 +16,8 @@ os.environ["MRG_LIMIT_LIVE_PER_IP_DAY"] = "3"
 os.environ["MRG_LIMIT_LIVE_GLOBAL_DAY"] = "4"
 os.environ["MRG_LIMIT_REQ_PER_IP_HOUR"] = "5"
 
-from access_guard import AccessGuard, LimitExceeded  # noqa: E402
+from access_guard import AccessGuard, GuardBusy, LimitExceeded  # noqa: E402
+import sqlite3  # noqa: E402
 from schemas import ImportRequest  # noqa: E402
 from service import ReviewImportService  # noqa: E402
 
@@ -66,6 +67,26 @@ def test_no_bloquear_a_otra_web():
     g.reserve_live("5.5.5.5", "victima.es", "d")
 
 
+def test_bloqueo_sqlite_da_ocupado():
+    db = os.path.join(tempfile.mkdtemp(), "b.sqlite3")
+    os.environ["MRG_SAAS_DB_PATH"] = db
+    os.environ["MRG_SQLITE_TIMEOUT"] = "0.2"
+    AccessGuard()  # crea el esquema
+    lock = sqlite3.connect(db, isolation_level=None)
+    lock.execute("BEGIN EXCLUSIVE")
+    try:
+        for fn in (lambda: AccessGuard().admit("1.2.3.4", "x", "k"), lambda: AccessGuard().reserve_live("1.2.3.4", "x", "k")):
+            try:
+                fn()
+                raise AssertionError("debía dar GuardBusy")
+            except GuardBusy:
+                pass
+    finally:
+        lock.execute("ROLLBACK")
+        lock.close()
+        os.environ["MRG_SQLITE_TIMEOUT"] = "10"
+
+
 def test_admit_per_ip_hour():
     g = AccessGuard()
     for _ in range(5):
@@ -100,5 +121,6 @@ if __name__ == "__main__":
     test_live_limits()
     test_admit_per_ip_hour()
     test_no_bloquear_a_otra_web()
+    test_bloqueo_sqlite_da_ocupado()
     test_concurrent_reservations()
     print("OK: dominio normalizado, límites por web/IP/global, por IP y hora, y reservas atómicas en concurrencia")
