@@ -113,13 +113,13 @@ check('MRG_VERSION ya definida: aviso de admin registrado', $r['other_copy_notic
 check('MRG_VERSION ya definida: gancho de activación registrado', in_array([$NEW, 'MRG\\Migration::on_activate'], $r['activation_hooks'], true));
 
 $r = scenario('clean', $tmp);
-check('instalación limpia: carga la 3.0', $r['fatal'] === null && $r['MRG_VERSION'] === '3.0.0' && $r['plugins_loaded'] === 1);
+check('instalación limpia: carga la 3.0', $r['fatal'] === null && strpos((string) $r['MRG_VERSION'], '3.') === 0 && $r['plugins_loaded'] === 1);
 check('instalación limpia: sin aviso de otra copia', $r['other_copy_notice'] === false);
 check('instalación limpia: filtro de actualizaciones SupuHub', $r['update_filter'] === true);
 check('instalación limpia: sin avisos PHP', $r['warnings'] === []);
 
 $r = scenario('old_present_inactive', $tmp);
-check('antigua presente pero inactiva: carga la 3.0', $r['MRG_VERSION'] === '3.0.0' && $r['plugins_loaded'] === 1 && !$r['other_copy_notice']);
+check('antigua presente pero inactiva: carga la 3.0', strpos((string) $r['MRG_VERSION'], '3.') === 0 && $r['plugins_loaded'] === 1 && !$r['other_copy_notice']);
 
 // ---------------------------------------------------------------------
 echo "\n2. Ambas activas (los dos órdenes de carga)\n";

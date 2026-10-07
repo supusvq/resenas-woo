@@ -24,8 +24,8 @@ class License
     const PRODUCT_CODE = 'resenaswoo';
     const LICENSE_MODE = 'domain';
 
-    // Página de compra (provisional hasta tener la ficha de venta definitiva).
-    const BUY_URL = 'https://supudigital.es/resenas-woo/';
+    // Enlace de pago de Stripe (LIVE) creado por supuhub-release: 49 €/año, 15 días de prueba.
+    const BUY_URL = 'https://buy.stripe.com/9B67sLclbcSlddL3GRcIE04';
 
     // Producción. Una instalación de pruebas apunta a staging con la constante
     // SUPUHUB_API_BASE en wp-config.php.
