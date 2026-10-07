@@ -83,7 +83,7 @@ class ApifyProvider(BaseReviewProvider):
             params={"token": self.token},
             json={
                 "startUrls": [{"url": str(payload.maps_url)}],
-                "maxReviews": max(20, self.limit_reviews(payload) * 4),
+                "maxReviews": max(12, self.limit_reviews(payload) * 2),
                 "reviewsSort": "newest",
                 "reviewsOrigin": "google",
                 "personalData": True,

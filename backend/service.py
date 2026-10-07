@@ -5,8 +5,13 @@ from providers.apify import ApifyProvider
 from providers.demo import DemoProvider
 from providers.google_business_profile import GoogleBusinessProfileProvider
 from providers.selenium_legacy import SeleniumLegacyProvider
+from reviews_cache import ReviewsCache
 from schemas import ImportRequest, ImportResponse
 from tenant_store import TenantStore
+
+# 6 dias: por debajo del cron semanal del plugin, para que el refresco
+# automatico siempre encuentre la cache caducada y traiga datos frescos.
+CACHE_MAX_AGE_SECONDS = 6 * 24 * 3600
 
 
 class ReviewImportService:
@@ -39,7 +44,17 @@ class ReviewImportService:
         if tenant_provider:
             return tenant_provider.import_reviews(payload)
 
-        return self.provider.import_reviews(payload)
+        # El scrape en vivo (Apify) tarda de forma impredecible: servimos la
+        # ultima respuesta valida cacheada y solo scrapeamos si esta caducada.
+        cache = ReviewsCache()
+        key = cache.place_key(str(payload.maps_url))
+        cached = cache.get(key, CACHE_MAX_AGE_SECONDS)
+        if cached:
+            return ImportResponse(**cached)
+
+        result = self.provider.import_reviews(payload)
+        cache.set(key, result.model_dump())
+        return result
 
     def _build_tenant_provider(self, payload: ImportRequest):
         if self.provider_name != "google_business_profile":
