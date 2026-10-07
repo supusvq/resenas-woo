@@ -13,6 +13,17 @@ class ReviewSyncService
 
     public function sync()
     {
+        // Importar desde Google es lo único que exige licencia de SupuHub. Se
+        // comprueba antes de leer ajustes o llamar al servicio: sin licencia no
+        // sale ninguna petición.
+        if (!\MRG\License\License::can_import()) {
+            return [
+                'added' => 0,
+                'error' => \MRG\License\License::import_blocked_message(),
+                'license_required' => true,
+            ];
+        }
+
         $settings = get_option('mrg_settings', []);
         $maps_url = esc_url_raw($settings['maps_url'] ?? '');
         $service_url = esc_url_raw($settings['scraper_service_url'] ?? '');

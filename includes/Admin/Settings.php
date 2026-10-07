@@ -386,6 +386,23 @@ class Settings
             echo '<p style="margin:0 0 10px 0;"><strong>' . esc_html__('Ultima importacion:', 'mis-resenas-de-google') . '</strong> ' . esc_html__('Nunca sincronizado', 'mis-resenas-de-google') . '</p>';
         }
 
+        // Importar desde Google exige licencia válida de SupuHub.
+        if (!\MRG\License\License::can_import()) {
+            echo '<div style="background:#fff3cd; padding:10px; border-left:4px solid #ffc107; margin-bottom:15px; border-radius:3px;"><p style="margin:0; color:#333;">'
+                . esc_html__('Importar reseñas de Google necesita una licencia válida.', 'mis-resenas-de-google') . ' ';
+            printf(
+                '<a href="%s">%s</a> · <a href="%s" target="_blank" rel="noopener">%s</a>',
+                esc_url(admin_url('admin.php?page=mrg-license')),
+                esc_html__('Activar licencia', 'mis-resenas-de-google'),
+                esc_url(\MRG\License\License::BUY_URL),
+                esc_html__('Comprar', 'mis-resenas-de-google')
+            );
+            echo '</p></div>';
+            echo '<button type="button" class="button button-primary" disabled style="margin-bottom:15px;">' . esc_html__('Importar reseñas ahora', 'mis-resenas-de-google') . '</button>';
+            echo '</div>';
+            return;
+        }
+
         echo '<button type="button" id="mrg_btn_update_manual" class="button button-primary" style="margin-bottom:15px;">' . esc_html__('Importar reseñas ahora', 'mis-resenas-de-google') . '</button>';
         echo '<span id="mrg_manual_update_status" style="margin-left:10px;"></span>';
         echo '<p class="description" style="margin-top:12px;">' . esc_html__('La importacion guardara localmente las 6 reseñas mas recientes para mostrarlas en WordPress.', 'mis-resenas-de-google') . '</p>';
