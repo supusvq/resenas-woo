@@ -3,7 +3,8 @@ import logging
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
-from access_guard import AccessGuard, LimitExceeded
+from access_guard import AccessGuard, GuardBusy, LimitExceeded
+from reviews_cache import ReviewsCache
 from google_oauth import GoogleOAuthClient
 from schemas import ImportRequest, ImportResponse, SiteLocationRequest, SiteRegisterRequest, SiteRegisterResponse
 from service import ReviewImportService
@@ -137,10 +138,14 @@ def import_reviews(payload: ImportRequest, request: Request):
     ip = client_ip(request)
 
     try:
-        AccessGuard().check_request(ip)
+        # Toda petición cuenta para el límite por IP y hora, sea cual sea el proveedor o el resultado.
+        guard = AccessGuard()
+        guard.admit(ip, guard.site_key(payload.site_url, ip), ReviewsCache().place_key(str(payload.maps_url)))
         return service.import_reviews(payload, ip=ip)
     except LimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
+    except GuardBusy as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

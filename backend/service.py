@@ -5,6 +5,8 @@ from providers.apify import ApifyProvider
 from providers.demo import DemoProvider
 from providers.google_business_profile import GoogleBusinessProfileProvider
 from providers.selenium_legacy import SeleniumLegacyProvider
+import logging
+
 from access_guard import AccessGuard
 from reviews_cache import ReviewsCache
 from schemas import ImportRequest, ImportResponse
@@ -13,6 +15,8 @@ from tenant_store import TenantStore
 # 6 dias: por debajo del cron semanal del plugin, para que el refresco
 # automatico siempre encuentre la cache caducada y traiga datos frescos.
 CACHE_MAX_AGE_SECONDS = 6 * 24 * 3600
+
+log = logging.getLogger("mrg_import_service")
 
 
 class ReviewImportService:
@@ -49,22 +53,24 @@ class ReviewImportService:
         # ultima respuesta valida cacheada y solo scrapeamos si esta caducada.
         cache = ReviewsCache()
         key = cache.place_key(str(payload.maps_url))
-        guard = AccessGuard()
-        site = guard.site_key(payload.site_url, ip)
         cached = cache.get(key, CACHE_MAX_AGE_SECONDS)
         if cached:
-            guard.log(ip, site, key, False, "cache")
             return ImportResponse(**cached)
 
-        # Solo el scrape en vivo cuesta Apify: es lo que se limita por web y por día.
-        guard.check_live(site)
+        # Solo el scrape en vivo cuesta Apify: se reserva el cupo ANTES de llamar al proveedor.
+        guard = AccessGuard()
+        row_id = guard.reserve_live(ip, guard.site_key(payload.site_url, ip), key)
         try:
             result = self.provider.import_reviews(payload)
         except Exception as exc:
-            guard.log(ip, site, key, True, "error: " + str(exc))
+            guard.finish(row_id, "error: " + str(exc))
             raise
-        guard.log(ip, site, key, True, "ok")
-        cache.set(key, result.model_dump())
+        guard.finish(row_id, "ok")
+        # Ya está pagado: si la caché no se puede guardar, se devuelve igualmente.
+        try:
+            cache.set(key, result.model_dump())
+        except Exception:
+            log.warning("No se pudo guardar la caché de %s", key, exc_info=True)
         return result
 
     def _build_tenant_provider(self, payload: ImportRequest):
