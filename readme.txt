@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 2.12.1
+Stable tag: 3.0.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,7 +27,14 @@ Display Google reviews locally and automate review requests after WooCommerce pu
 This plugin can connect to an external review import service. The site owner must configure the service URL and explicitly consent before any Google Maps URL is sent to that service.
 The plugin sends only the Google Maps URL, the configured review limit, the site language, the site URL, and an optional internal site token when an import is manually triggered by an administrator.
 
+### Licencia (SupuHub)
+Importar reseñas de Google (botón manual y tarea semanal) y recibir actualizaciones necesita una licencia de SupuDigital (49 €/año, 15 días de prueba, 1 web). Sin licencia, las reseñas guardadas se siguen mostrando y los emails de petición de reseña se siguen enviando.
+Para activar y revalidar la licencia (cada 12 h) el plugin envía a api.supudigital.es la clave (en cabecera), un identificador anónimo de la instalación, la URL de la web y las versiones del plugin y de WordPress.
+
 == Installation ==
+
+**Si ya tienes la versión 2.x (carpeta resenas_woo):** instala y activa la 3.0; desactiva sola la antigua y conserva reseñas, historial y ajustes. Después usa `Reseñas Woo > Licencia > Eliminar la versión antigua de forma segura`. **No borres la versión antigua desde Plugins: su desinstalador borra las reseñas.**
+
 
 1. Upload the plugin folder to the `/wp-content/plugins/` directory.
 2. Activate the plugin through the `Plugins` menu in WordPress.
@@ -59,6 +66,13 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 3.0.0 =
+* Licencias y actualizaciones con SupuHub. Nueva pantalla Reseñas Woo > Licencia.
+* Importar reseñas de Google exige licencia válida; mostrar reseñas y enviar emails no.
+* La tarea semanal no reintenta cuando falta la licencia.
+* Nueva carpeta resenas-woo: al activarla se desactiva la 2.x sin tocar datos y se puede eliminar la carpeta antigua de forma segura.
+* Desinstalar ya no borra los datos salvo que se marque "Borrar todos los datos al desinstalar".
 
 = 2.12.1 =
 * Móvil: el bloque destacado de reseñas ya no desborda la pantalla (grid minmax(0, 1fr)).

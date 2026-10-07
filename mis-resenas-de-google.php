@@ -1,22 +1,70 @@
 <?php
 /**
  * Plugin Name: Reseñas Woo
- * Plugin URI: https://www.supudigital.es
+ * Plugin URI: https://supudigital.es/resenas-woo/
  * Description: Visualiza reseñas de Google almacenadas localmente y automatiza solicitudes de reseña post-compra en WooCommerce.
- * Version: 2.12.3
- * Author: Juan Gallardo
+ * Version: 3.0.0
+ * Author: Juan Gallardo by SupuDigital
  * Author URI: https://www.supudigital.es
  * Text Domain: mis-resenas-de-google
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
+ * Update URI: https://api.supudigital.es/products/resenaswoo
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MRG_VERSION', '2.12.3');
+/*
+ * Convivencia con otra copia (la 2.x en la carpeta resenas_woo/ u otra copia de la 3.x).
+ * Comparten clases MRG\... y constantes MRG_*: cargar dos veces daría avisos y
+ * ganchos duplicados (emails repetidos). Si otra copia ya está cargada, o la versión
+ * antigua sigue activa (WordPress carga resenas-woo/ antes que resenas_woo/ porque
+ * '-' va antes que '_'), esta copia se queda en reposo: solo avisa y deja registrado
+ * su gancho de activación, que desactiva la antigua sin tocar datos.
+ */
+$mrg_other_copy = defined('MRG_VERSION') || class_exists('MRG\\Autoloader', false);
+$mrg_network = [];
+if (!$mrg_other_copy) {
+    if (!class_exists('MRG\\Migration', false)) {
+        require_once __DIR__ . '/includes/Migration.php';
+    }
+    if (function_exists('is_multisite') && is_multisite()) {
+        $mrg_network = (array) get_site_option('active_sitewide_plugins', []);
+    }
+    $mrg_other_copy = defined('WP_PLUGIN_DIR') && \MRG\Migration::old_is_active(
+        (array) get_option('active_plugins', []),
+        $mrg_network,
+        WP_PLUGIN_DIR,
+        plugin_basename(__FILE__)
+    );
+}
+
+if ($mrg_other_copy) {
+    if (!class_exists('MRG\\Migration', false)) {
+        require_once __DIR__ . '/includes/Migration.php';
+    }
+    register_activation_hook(__FILE__, ['MRG\\Migration', 'on_activate']);
+    add_action('admin_notices', 'mrg_other_copy_notice');
+    if (!function_exists('mrg_other_copy_notice')) {
+        function mrg_other_copy_notice()
+        {
+            if (!current_user_can('activate_plugins')) {
+                return;
+            }
+            echo '<div class="notice notice-warning"><p><strong>Reseñas Woo 3:</strong> '
+                . esc_html__('hay otra versión de Reseñas Woo activa y la nueva está en espera. Desactiva la versión antigua en Plugins (desactivar no borra nada). No la borres desde Plugins: su desinstalador borra las reseñas.', 'mis-resenas-de-google')
+                . '</p></div>';
+        }
+    }
+    unset($mrg_other_copy, $mrg_network);
+    return;
+}
+unset($mrg_other_copy, $mrg_network);
+
+define('MRG_VERSION', '3.0.0');
 define('MRG_FILE', __FILE__);
 define('MRG_PATH', plugin_dir_path(__FILE__));
 define('MRG_URL', plugin_dir_url(__FILE__));
@@ -25,7 +73,7 @@ define('MRG_BASENAME', plugin_basename(__FILE__));
 require_once MRG_PATH . 'includes/Autoloader.php';
 \MRG\Autoloader::register();
 
-register_activation_hook(__FILE__, ['MRG\\Activator', 'activate']);
+register_activation_hook(__FILE__, ['MRG\\Migration', 'on_activate']);
 register_deactivation_hook(__FILE__, ['MRG\\Deactivator', 'deactivate']);
 
 add_action('before_woocommerce_init', function () {
@@ -33,6 +81,11 @@ add_action('before_woocommerce_init', function () {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
     }
 });
+
+// Licencia y actualizaciones de SupuHub: en todas las peticiones (WP-Cron incluido).
+\MRG\License\License::hooks();
+\MRG\License\Updater::hooks();
+\MRG\Migration::hooks();
 
 add_action('plugins_loaded', function () {
     load_plugin_textdomain('mis-resenas-de-google', false, dirname(MRG_BASENAME) . '/languages');
@@ -45,6 +98,7 @@ add_action('plugins_loaded', function () {
         (new MRG\Admin\EmailsPage())->init();
         (new MRG\Admin\LogsPage())->init();
         (new MRG\Admin\InvitationsPage())->init();
+        (new MRG\Admin\LicensePage())->init();
     }
 
     (new MRG\Frontend\Shortcode())->init();
@@ -57,30 +111,11 @@ add_action('plugins_loaded', function () {
         (new MRG\WooCommerce\OrderHooks())->init();
     }
 
-    // Hook para envíos programados (Cron)
+    // Hook para envíos programados (Cron). No depende de la licencia.
     add_action('mrg_send_scheduled_email', function ($order_id) {
         (new MRG\Emails\EmailScheduler())->send_now($order_id);
     });
 
-    // Importación automática de reseñas de Google una vez por semana (lunes a las 9:00, hora de la web).
-    // Si falla (servicio ocupado, límite, red…), reintenta a las 2 h, 6 h y 25 h del primer fallo (cada retraso
-    // cuenta desde el reintento anterior): el último cae ya fuera
-    // de la ventana de 24 h de los límites diarios del servicio.
-    $mrg_auto_sync = function ($attempt = 0) {
-        $attempt = (int) $attempt;
-        $result  = (new MRG\Reviews\ReviewSyncService())->sync();
-        update_option('mrg_auto_sync_last', ['time' => time(), 'attempt' => $attempt, 'result' => $result], false);
-        if (isset($result['error']) && $attempt < 3 && !wp_next_scheduled('mrg_weekly_sync_retry', [$attempt + 1])) {
-            $delays = [2, 4, 19];
-            wp_schedule_single_event(time() + $delays[$attempt] * HOUR_IN_SECONDS, 'mrg_weekly_sync_retry', [$attempt + 1]);
-        }
-    };
-    add_action('mrg_weekly_sync', function () use ($mrg_auto_sync) {
-        $mrg_auto_sync(0);
-    });
-    add_action('mrg_weekly_sync_retry', $mrg_auto_sync);
-    if (!wp_next_scheduled('mrg_weekly_sync')) {
-        $first = new DateTimeImmutable('next monday 09:00', wp_timezone());
-        wp_schedule_event($first->getTimestamp(), 'weekly', 'mrg_weekly_sync');
-    }
+    // Importación automática semanal con reintentos (exige licencia; ver AutoSync).
+    \MRG\Reviews\AutoSync::hooks();
 });
