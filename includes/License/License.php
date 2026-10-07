@@ -74,6 +74,7 @@ class License
                 'key_tag' => '',
                 'key_masked' => '',
                 'status' => '',
+                'active' => false, // "active" de la última respuesta de SupuHub.
                 'product' => '',
                 'expires_at' => '',
                 'updates' => null,
@@ -134,6 +135,11 @@ class License
             return false;
         }
         if (!in_array($state['status'], ['active', 'trial'], true)) {
+            return false;
+        }
+        // La última respuesta recibida tiene que haber dicho active === true: una
+        // negativa explícita quita el permiso al momento, aunque el status diga otra cosa.
+        if (true !== $state['active']) {
             return false;
         }
         // SupuHub valida cualquier clave suya: una de otro producto no vale aquí.
@@ -310,6 +316,11 @@ class License
         }
 
         self::save(self::apply_response($data, $state));
+
+        // Una negativa invalida también el paquete de actualización guardado.
+        if (!self::is_valid()) {
+            delete_option(Updater::CACHE_OPTION);
+        }
     }
 
     /**
@@ -429,6 +440,7 @@ class License
         $now = gmdate('Y-m-d H:i:s');
 
         $state['status'] = $status;
+        $state['active'] = $active;
         $state['product'] = isset($data['product']) ? (string) $data['product'] : $state['product'];
         $state['expires_at'] = isset($data['expires_at']) ? (string) $data['expires_at'] : '';
         $state['reason'] = isset($data['reason']) ? (string) $data['reason'] : '';
@@ -450,9 +462,13 @@ class License
             }
         }
 
-        // Solo cuenta como válida si es de ESTE producto.
+        // Solo cuenta como válida si es de ESTE producto. Cualquier otra respuesta
+        // de SupuHub (negativa, otro producto, estado raro) borra la última validez:
+        // la gracia de 72 h es solo para fallos de red, nunca para una negativa.
         if ($active && in_array($status, ['active', 'trial'], true) && self::PRODUCT_CODE === $state['product']) {
             $state['last_valid_at'] = $now;
+        } else {
+            $state['last_valid_at'] = '';
         }
 
         return $state;

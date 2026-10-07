@@ -23,6 +23,7 @@ class Updater
     const HOST = 'api.supudigital.es';
     const CACHE_OPTION = 'mrg_update_cache';
     const NAME = 'Reseñas Woo';
+    const CACHE_TTL_HOURS = 12; // La respuesta guardada caduca: no se reutiliza para siempre.
 
     /**
      * Registra los filtros. También fuera del admin: WP-Cron comprueba
@@ -53,11 +54,14 @@ class Updater
         try {
             $data = License::update_check();
             if (self::is_for_this_plugin($data)) {
-                update_option(self::CACHE_OPTION, $data, false);
+                // Se guarda cualquier respuesta, también las negativas (sin package):
+                // así una denegación sustituye al paquete guardado antes.
+                update_option(self::CACHE_OPTION, ['time' => time(), 'data' => $data], false);
             }
         } catch (\Throwable $e) {
-            // Caída o timeout: vale lo último que se supo.
-            $data = get_option(self::CACHE_OPTION);
+            // Caída o timeout: vale lo último que se supo, sin package si la
+            // licencia no es válida ahora y solo durante CACHE_TTL_HOURS.
+            $data = self::cached();
         }
 
         return is_array($data) && self::is_for_this_plugin($data) ? self::to_wordpress($data) : $update;
@@ -72,7 +76,7 @@ class Updater
             return $result;
         }
 
-        $data = License::has_key() ? get_option(self::CACHE_OPTION) : null;
+        $data = License::has_key() ? self::cached() : null;
         $data = is_array($data) && self::is_for_this_plugin($data) ? $data : [];
         $changelog = trim((string) (isset($data['changelog']) ? $data['changelog'] : ''));
 
@@ -92,6 +96,29 @@ class Updater
                     : esc_html__('Sin notas para esta versión.', 'mis-resenas-de-google'),
             ],
         ];
+    }
+
+    /**
+     * Respuesta guardada, o null si no hay o ha caducado. Nunca devuelve un
+     * package si la licencia local no es válida en este momento.
+     */
+    public static function cached()
+    {
+        $cache = get_option(self::CACHE_OPTION);
+        if (!is_array($cache) || !isset($cache['time'], $cache['data']) || !is_array($cache['data'])) {
+            return null;
+        }
+        if (time() - (int) $cache['time'] > self::CACHE_TTL_HOURS * HOUR_IN_SECONDS) {
+            delete_option(self::CACHE_OPTION);
+            return null;
+        }
+
+        $data = $cache['data'];
+        if (!License::is_valid()) {
+            $data['package'] = '';
+        }
+
+        return $data;
     }
 
     /**

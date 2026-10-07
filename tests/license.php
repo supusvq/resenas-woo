@@ -229,7 +229,7 @@ respond(['update' => false, 'version' => '3.0.0']);
 $u = Updater::check_update(false, [], MRG_BASENAME, []);
 check('sin versión nueva: no hay package', is_array($u) && $u['package'] === '' && $u['new_version'] === '3.0.0');
 
-update_option(Updater::CACHE_OPTION, ['update' => true, 'plugin' => MRG_BASENAME, 'version' => '3.1.0', 'package' => 'https://x/cached']);
+update_option(Updater::CACHE_OPTION, ['time' => time(), 'data' => ['update' => true, 'plugin' => MRG_BASENAME, 'version' => '3.1.0', 'package' => 'https://x/cached']]);
 network_error();
 $u = Updater::check_update(false, [], MRG_BASENAME, []);
 check('SupuHub caído: usa la última respuesta', is_array($u) && $u['package'] === 'https://x/cached');
@@ -237,6 +237,68 @@ check('SupuHub caído: usa la última respuesta', is_array($u) && $u['package'] 
 $info = Updater::plugin_info(false, 'plugin_information', (object) ['slug' => 'resenas-woo']);
 check('ficha Ver detalles', is_object($info) && $info->name === 'Reseñas Woo' && $info->version === '3.1.0');
 check('ficha de otro slug intacta', Updater::plugin_info(false, 'plugin_information', (object) ['slug' => 'otro']) === false);
+
+// ---------------------------------------------------------------------
+echo "\n8b. Caché de actualizaciones: TTL y licencia no válida (regresión Codex #6)\n";
+$cached_pkg = ['time' => time(), 'data' => ['update' => true, 'plugin' => MRG_BASENAME, 'version' => '3.1.0', 'package' => 'https://x/cached']];
+update_option(Updater::CACHE_OPTION, $cached_pkg);
+$saved = $GLOBALS['options'][License::OPTION];
+$GLOBALS['options'][License::OPTION]['active'] = false; // licencia local no válida
+network_error();
+$u = Updater::check_update(false, [], MRG_BASENAME, []);
+check('caché con licencia no válida: versión sin package', is_array($u) && $u['package'] === '' && $u['new_version'] === '3.1.0');
+$info = Updater::plugin_info(false, 'plugin_information', (object) ['slug' => 'resenas-woo']);
+check('ficha con licencia no válida: sin download_link', $info->download_link === '');
+$GLOBALS['options'][License::OPTION] = $saved;
+
+update_option(Updater::CACHE_OPTION, ['time' => time() - 13 * 3600] + $cached_pkg);
+network_error();
+$u = Updater::check_update(false, [], MRG_BASENAME, []);
+check('caché de más de 12 h: no se usa', $u === false);
+check('caché caducada: se borra', get_option(Updater::CACHE_OPTION) === false);
+
+update_option(Updater::CACHE_OPTION, $cached_pkg);
+respond(['update' => true, 'plugin' => MRG_BASENAME, 'version' => '3.1.0', 'package' => '', 'license_valid' => false, 'reason' => 'Tu licencia está suspendida.']);
+Updater::check_update(false, [], MRG_BASENAME, []);
+network_error();
+$u = Updater::check_update(false, [], MRG_BASENAME, []);
+check('una denegación de SupuHub sustituye al package guardado', is_array($u) && $u['package'] === '');
+
+update_option(Updater::CACHE_OPTION, $cached_pkg);
+respond(['active' => false, 'status' => 'suspended', 'product' => 'resenaswoo', 'reason' => 'Licencia suspendida.']);
+License::check();
+check('una negativa en la revalidación borra la caché', get_option(Updater::CACHE_OPTION) === false);
+valid_response(['status' => 'active']);
+License::check();
+check('recuperada tras la negativa', License::is_valid());
+
+echo "\n8c. Negativa explícita sin gracia (regresión Codex #5)\n";
+respond(['active' => false, 'status' => 'active', 'product' => 'resenaswoo', 'reason' => 'Licencia no válida.']);
+License::check();
+check('active=false con status=active: deja de valer al momento', !License::is_valid());
+check('active=false: borra la última validez', License::state()['last_valid_at'] === '');
+$r = (new ReviewSyncService())->sync();
+check('active=false: la sync se bloquea', !empty($r['license_required']));
+age(['next_check_at' => 0.01]);
+network_error();
+License::maybe_check();
+check('fallo de red tras la negativa: la gracia NO la recupera', !License::is_valid());
+valid_response(['status' => 'active']);
+License::check();
+check('respuesta positiva: vuelve a valer', License::is_valid());
+
+$GLOBALS['options'][License::OPTION]['active'] = false;
+check('is_valid exige active === true en la última respuesta', !License::is_valid());
+valid_response(['status' => 'active']);
+License::check();
+
+respond(['active' => true, 'status' => 'active', 'product' => 'otroproducto']);
+License::check();
+network_error();
+try { License::check(); } catch (Throwable $e) {}
+check('otro producto + fallo de red: tampoco hay gracia', !License::is_valid());
+valid_response(['status' => 'active']);
+License::check();
 
 // ---------------------------------------------------------------------
 echo "\n9. Desactivación\n";
