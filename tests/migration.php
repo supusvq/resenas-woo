@@ -67,9 +67,9 @@ function setup_env($tmp, $root, $with_old = true)
     rcopy($root . '/includes', $tmp . '/plugins/resenas-woo/includes');
 
     if ($with_old) {
-        // Código real de la 2.12.3 (rama main).
+        // Código real de la 2.12.3 (etiqueta v2.12.3, última 2.x).
         $tar = $tmp . '/old.tar';
-        $cmd = 'git -C ' . escapeshellarg($root) . ' archive --format=tar --prefix=resenas_woo/ main mis-resenas-de-google.php uninstall.php includes > ' . escapeshellarg($tar);
+        $cmd = 'git -C ' . escapeshellarg($root) . ' archive --format=tar --prefix=resenas_woo/ v2.12.3 mis-resenas-de-google.php uninstall.php includes > ' . escapeshellarg($tar);
         exec($cmd, $out, $code);
         if ($code !== 0) {
             fwrite(STDERR, "No se pudo extraer la 2.x con git archive\n");
