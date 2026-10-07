@@ -63,14 +63,15 @@ add_action('plugins_loaded', function () {
     });
 
     // Importación automática de reseñas de Google una vez por semana (lunes a las 9:00, hora de la web).
-    // Si falla (servicio ocupado, límite, red…), reintenta a las 2 h, 6 h y 25 h: el último cae ya fuera
+    // Si falla (servicio ocupado, límite, red…), reintenta a las 2 h, 6 h y 25 h del primer fallo (cada retraso
+    // cuenta desde el reintento anterior): el último cae ya fuera
     // de la ventana de 24 h de los límites diarios del servicio.
     $mrg_auto_sync = function ($attempt = 0) {
         $attempt = (int) $attempt;
         $result  = (new MRG\Reviews\ReviewSyncService())->sync();
         update_option('mrg_auto_sync_last', ['time' => time(), 'attempt' => $attempt, 'result' => $result], false);
         if (isset($result['error']) && $attempt < 3 && !wp_next_scheduled('mrg_weekly_sync_retry', [$attempt + 1])) {
-            $delays = [2, 6, 25];
+            $delays = [2, 4, 19];
             wp_schedule_single_event(time() + $delays[$attempt] * HOUR_IN_SECONDS, 'mrg_weekly_sync_retry', [$attempt + 1]);
         }
     };

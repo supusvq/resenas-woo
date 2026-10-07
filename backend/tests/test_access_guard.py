@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import threading
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -69,22 +70,23 @@ def test_no_bloquear_a_otra_web():
 
 def test_bloqueo_sqlite_da_ocupado():
     db = os.path.join(tempfile.mkdtemp(), "b.sqlite3")
-    os.environ["MRG_SAAS_DB_PATH"] = db
-    os.environ["MRG_SQLITE_TIMEOUT"] = "0.2"
-    AccessGuard()  # crea el esquema
-    lock = sqlite3.connect(db, isolation_level=None)
-    lock.execute("BEGIN EXCLUSIVE")
-    try:
-        for fn in (lambda: AccessGuard().admit("1.2.3.4", "x", "k"), lambda: AccessGuard().reserve_live("1.2.3.4", "x", "k")):
-            try:
-                fn()
-                raise AssertionError("debía dar GuardBusy")
-            except GuardBusy:
-                pass
-    finally:
-        lock.execute("ROLLBACK")
-        lock.close()
-        os.environ["MRG_SQLITE_TIMEOUT"] = "10"
+    with patch.dict(os.environ, {"MRG_SAAS_DB_PATH": db, "MRG_SQLITE_TIMEOUT": "0.2"}):
+        g = AccessGuard()  # crea el esquema antes de adquirir el bloqueo
+        lock = sqlite3.connect(db, isolation_level=None)
+        try:
+            lock.execute("BEGIN EXCLUSIVE")
+            for fn in (AccessGuard, lambda: g.admit("1.2.3.4", "x", "k"), lambda: g.reserve_live("1.2.3.4", "x", "k")):
+                try:
+                    fn()
+                    raise AssertionError("debía dar GuardBusy")
+                except GuardBusy:
+                    pass
+        finally:
+            lock.rollback()
+            lock.close()
+        # Tras liberar el bloqueo, ambas operaciones deben volver a funcionar.
+        g.admit("1.2.3.4", "x", "k")
+        assert g.reserve_live("1.2.3.4", "x", "k") > 0
 
 
 def test_admit_per_ip_hour():
