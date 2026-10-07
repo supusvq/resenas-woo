@@ -19,8 +19,8 @@ class GuardBusy(Exception):
 class AccessGuard:
     """Límites de uso y registro de llamadas a /v1/import-reviews.
 
-    El servicio no exige licencia todavía (llegará con SupuHub), así que cualquiera
-    podría disparar scrapes de Apify. Mientras tanto:
+    La licencia de SupuHub la comprueba license_gate.py (modo log/enforce); estos límites
+    siguen siendo el freno de gasto de Apify en cualquier modo:
 
     - cada petición se admite y se anota en una transacción atómica (límite por IP y hora);
     - cada scrape en vivo (lo que cuesta Apify) RESERVA su cupo antes de llamar al proveedor,

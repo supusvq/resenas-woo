@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 from access_guard import AccessGuard, GuardBusy, LimitExceeded
+from license_gate import LicenseDenied, LicenseGate, license_mode
 from reviews_cache import ReviewsCache
 from google_oauth import GoogleOAuthClient
 from schemas import ImportRequest, ImportResponse, SiteLocationRequest, SiteRegisterRequest, SiteRegisterResponse
@@ -23,7 +24,9 @@ app = FastAPI(
 @app.get("/health")
 def healthcheck():
     service = ReviewImportService()
-    return service.health()
+    data = service.health()
+    data["license_mode"] = license_mode()
+    return data
 
 
 @app.get("/health/upstream")
@@ -141,8 +144,16 @@ def import_reviews(payload: ImportRequest, request: Request):
     try:
         # Toda petición cuenta para el límite por IP y hora, sea cual sea el proveedor o el resultado.
         guard = AccessGuard()
-        guard.admit(ip, guard.site_key(payload.site_url, ip), ReviewsCache.place_key(str(payload.maps_url)))
+        site = guard.site_key(payload.site_url, ip)
+        place = ReviewsCache.place_key(str(payload.maps_url))
+        guard.admit(ip, site, place)
+        # Licencia ANTES de servir caché o llamar a Apify: también se aplica a la caché.
+        LicenseGate().authorize(site, place, ip)
         return service.import_reviews(payload, ip=ip)
+    except LicenseDenied as exc:
+        d = exc.decision
+        headers = {"Retry-After": "300"} if d.status_code == 503 else None
+        raise HTTPException(status_code=d.status_code, detail=d.detail, headers=headers) from exc
     except LimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "3600"}) from exc
     except (GuardBusy, sqlite3.OperationalError) as exc:
