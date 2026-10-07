@@ -102,6 +102,21 @@ class Updater
      * Respuesta guardada, o null si no hay o ha caducado. Nunca devuelve un
      * package si la licencia local no es válida en este momento.
      */
+    /**
+     * Olvida cualquier actualización ofrecida: la caché propia y la entrada de este plugin en el
+     * transient update_plugins de WordPress (su actualizador usa esa URL sin pasar por cached()).
+     */
+    public static function forget_offer()
+    {
+        delete_option(self::CACHE_OPTION);
+        $t = get_site_transient('update_plugins');
+        $file = self::plugin_file();
+        if (is_object($t) && isset($t->response[$file])) {
+            unset($t->response[$file]);
+            set_site_transient('update_plugins', $t);
+        }
+    }
+
     public static function cached()
     {
         $cache = get_option(self::CACHE_OPTION);

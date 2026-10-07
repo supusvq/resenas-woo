@@ -283,7 +283,7 @@ class License
         self::save(self::apply_response($data, $state));
 
         // Con clave nueva, la respuesta de actualización guardada ya no vale.
-        delete_option(Updater::CACHE_OPTION);
+        Updater::forget_offer();
         delete_site_transient('update_plugins');
 
         if (!wp_next_scheduled(self::HOOK)) {
@@ -317,9 +317,9 @@ class License
 
         self::save(self::apply_response($data, $state));
 
-        // Una negativa invalida también el paquete de actualización guardado.
+        // Una negativa invalida también el paquete de actualización guardado, el nuestro y el de WordPress.
         if (!self::is_valid()) {
-            delete_option(Updater::CACHE_OPTION);
+            Updater::forget_offer();
         }
     }
 
@@ -396,7 +396,7 @@ class License
     public static function forget()
     {
         delete_option(self::OPTION);
-        delete_option(Updater::CACHE_OPTION);
+        Updater::forget_offer();
         delete_site_transient('update_plugins');
         self::unschedule();
     }

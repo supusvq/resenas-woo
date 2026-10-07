@@ -239,6 +239,10 @@ check('neutralizar dos veces no reescribe (idempotente)', Migration::neutralize_
 setup_env($tmp, $root, true);
 check('neutralizar desde la propia carpeta antigua no hace nada', Migration::neutralize_old_uninstall($plugins, $plugins . '/resenas_woo') === '' && strpos(file_get_contents($old_un), 'DROP TABLE') !== false);
 check('sin WP_PLUGIN_DIR no hace nada', Migration::neutralize_old_uninstall('', $own) === '');
+// Escritura a medias: tiene la marca pero no el contenido completo → se reescribe entero.
+file_put_contents($old_un, substr($stub, 0, 60));
+check('stub truncado con la marca: se detecta y se reescribe entero', Migration::neutralize_old_uninstall($plugins, $own) === '' && file_get_contents($old_un) === $stub);
+check('no quedan temporales de la escritura atómica', glob(dirname($old_un) . '/.uninstall.php.mrg-*') === []);
 check('2.x reinstalada encima: se vuelve a neutralizar', Migration::neutralize_old_uninstall($plugins, $own) === '' && strpos(file_get_contents($old_un), Migration::STUB_MARKER) !== false);
 
 setup_env($tmp, $root, true);

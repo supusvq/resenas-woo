@@ -11,6 +11,8 @@ require __DIR__ . '/bootstrap.php';
 define('MRG_VERSION', '3.0.0');
 define('MRG_PATH', dirname(__DIR__) . '/');
 define('MRG_BASENAME', 'resenas-woo/mis-resenas-de-google.php');
+function get_site_transient($k) { return $GLOBALS['site_transients'][$k] ?? false; }
+function set_site_transient($k, $v, $e = 0) { $GLOBALS['site_transients'][$k] = $v; return true; }
 
 require MRG_PATH . 'includes/Autoloader.php';
 \MRG\Autoloader::register();
@@ -319,5 +321,21 @@ License::activate(KEY);
 network_error();
 throws('desactivar sin red avisa y no borra', function () { License::deactivate(); });
 check('la licencia sigue guardada tras fallo', License::has_key());
+
+echo "
+8c. Revocación: borra también la oferta guardada por WordPress (regresión Codex 2.ª ronda)
+";
+$GLOBALS['site_transients']['update_plugins'] = (object) ['response' => [
+    MRG_BASENAME => (object) ['package' => 'https://x/viejo.zip'],
+    'otro/otro.php' => (object) ['package' => 'https://y/otro.zip'],
+]];
+update_option(Updater::CACHE_OPTION, $cached_pkg);
+Updater::forget_offer();
+$t = get_site_transient('update_plugins');
+check('forget_offer quita nuestra entrada de update_plugins', !isset($t->response[MRG_BASENAME]));
+check('forget_offer no toca otros plugins', isset($t->response['otro/otro.php']));
+check('forget_offer borra la caché propia', get_option(Updater::CACHE_OPTION) === false);
+$src = (string) file_get_contents(__DIR__ . '/../includes/License/License.php');
+check('License no borra la caché propia sin pasar por forget_offer', strpos($src, 'delete_option(Updater::CACHE_OPTION)') === false && substr_count($src, 'Updater::forget_offer()') >= 3);
 
 summary('license.php');

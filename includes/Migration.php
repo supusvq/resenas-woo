@@ -142,12 +142,18 @@ class Migration
             return ''; // Sería el desinstalador de esta misma copia.
         }
 
-        if (false !== strpos((string) @file_get_contents($real_file), self::STUB_MARKER)) {
-            return ''; // Ya neutralizado.
+        if ((string) @file_get_contents($real_file) === self::STUB) {
+            return ''; // Ya neutralizado (contenido completo, no solo la marca).
         }
 
-        if (!is_writable($real_file) || false === @file_put_contents($real_file, self::STUB, LOCK_EX)) {
-            return __('No se ha podido desarmar el desinstalador de la versión antigua (permisos). No la borres desde Plugins: borraría las reseñas.', 'mis-resenas-de-google');
+        // Se escribe en un temporal de la misma carpeta, se valida ENTERO y se sustituye con rename()
+        // (atómico en el mismo sistema de archivos): una escritura a medias nunca queda como uninstall.php.
+        $tmp = dirname($real_file) . '/.uninstall.php.mrg-' . uniqid('', true);
+        $written = is_writable($real_file) && is_writable(dirname($real_file))
+            ? @file_put_contents($tmp, self::STUB, LOCK_EX) : false;
+        if (strlen(self::STUB) !== $written || (string) @file_get_contents($tmp) !== self::STUB || !@rename($tmp, $real_file)) {
+            @unlink($tmp);
+            return __('No se ha podido desarmar el desinstalador de la versión antigua (permisos o espacio). No la borres desde Plugins: borraría las reseñas.', 'mis-resenas-de-google');
         }
 
         clearstatcache(true, $real_file);
@@ -155,7 +161,7 @@ class Migration
             @opcache_invalidate($real_file, true);
         }
 
-        return false !== strpos((string) file_get_contents($real_file), self::STUB_MARKER)
+        return (string) file_get_contents($real_file) === self::STUB
             ? ''
             : __('No se ha podido comprobar el desinstalador de la versión antigua.', 'mis-resenas-de-google');
     }
