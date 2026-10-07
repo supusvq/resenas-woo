@@ -1,0 +1,23 @@
+{
+  "product": {
+    "code": "resenaswoo",
+    "name": "Reseñas Woo",
+    "type": "wordpress_plugin",
+    "activation_mode": "domain",
+    "key_prefix": "RESENAS",
+    "wp_slug": "resenas-woo",
+    "wp_plugin_file": "resenas-woo/mis-resenas-de-google.php",
+    "update_uri": "https://api.supudigital.es/products/resenaswoo"
+  },
+  "plans": [
+    {
+      "code": "annual",
+      "name": "Reseñas Woo Anual",
+      "amount": 4900,
+      "currency": "eur",
+      "interval": "year",
+      "activation_limit": 1,
+      "trial_days": 15
+    }
+  ]
+}

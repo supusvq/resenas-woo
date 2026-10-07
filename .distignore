@@ -1,0 +1,14 @@
+# Fuera del ZIP si se empaqueta con supuhub-pack (usar: supuhub-pack . --slug resenas-woo).
+# build-release.php ya usa su propia lista blanca.
+backend
+docs
+skills
+tests
+dist
+diseno-supusnippets-pro
+*.md
+*.MD
+supuhub.json
+build-release.php
+build-release.sh
+build-release.ps1
