@@ -5,6 +5,7 @@ from providers.apify import ApifyProvider
 from providers.demo import DemoProvider
 from providers.google_business_profile import GoogleBusinessProfileProvider
 from providers.selenium_legacy import SeleniumLegacyProvider
+from access_guard import AccessGuard
 from reviews_cache import ReviewsCache
 from schemas import ImportRequest, ImportResponse
 from tenant_store import TenantStore
@@ -39,7 +40,7 @@ class ReviewImportService:
         # Backwards compatible endpoint: now reports the active provider.
         return self.provider.health()
 
-    def import_reviews(self, payload: ImportRequest) -> ImportResponse:
+    def import_reviews(self, payload: ImportRequest, ip: str = "") -> ImportResponse:
         tenant_provider = self._build_tenant_provider(payload)
         if tenant_provider:
             return tenant_provider.import_reviews(payload)
@@ -48,11 +49,21 @@ class ReviewImportService:
         # ultima respuesta valida cacheada y solo scrapeamos si esta caducada.
         cache = ReviewsCache()
         key = cache.place_key(str(payload.maps_url))
+        guard = AccessGuard()
+        site = guard.site_key(payload.site_url, ip)
         cached = cache.get(key, CACHE_MAX_AGE_SECONDS)
         if cached:
+            guard.log(ip, site, key, False, "cache")
             return ImportResponse(**cached)
 
-        result = self.provider.import_reviews(payload)
+        # Solo el scrape en vivo cuesta Apify: es lo que se limita por web y por día.
+        guard.check_live(site)
+        try:
+            result = self.provider.import_reviews(payload)
+        except Exception as exc:
+            guard.log(ip, site, key, True, "error: " + str(exc))
+            raise
+        guard.log(ip, site, key, True, "ok")
         cache.set(key, result.model_dump())
         return result
 

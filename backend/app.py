@@ -1,8 +1,9 @@
 import logging
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
+from access_guard import AccessGuard, LimitExceeded
 from google_oauth import GoogleOAuthClient
 from schemas import ImportRequest, ImportResponse, SiteLocationRequest, SiteRegisterRequest, SiteRegisterResponse
 from service import ReviewImportService
@@ -125,12 +126,21 @@ def google_select_location(payload: SiteLocationRequest):
     }
 
 
+def client_ip(request: Request) -> str:
+    # Solo nginx llega a 127.0.0.1:8000 y fija X-Real-IP con la IP del visitante.
+    return (request.headers.get("x-real-ip") or (request.client.host if request.client else "") or "?").strip()
+
+
 @app.post("/v1/import-reviews", response_model=ImportResponse)
-def import_reviews(payload: ImportRequest):
+def import_reviews(payload: ImportRequest, request: Request):
     service = ReviewImportService()
+    ip = client_ip(request)
 
     try:
-        return service.import_reviews(payload)
+        AccessGuard().check_request(ip)
+        return service.import_reviews(payload, ip=ip)
+    except LimitExceeded as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
