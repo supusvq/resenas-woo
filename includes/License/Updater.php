@@ -99,10 +99,6 @@ class Updater
     }
 
     /**
-     * Respuesta guardada, o null si no hay o ha caducado. Nunca devuelve un
-     * package si la licencia local no es válida en este momento.
-     */
-    /**
      * Olvida cualquier actualización ofrecida: la caché propia y la entrada de este plugin en el
      * transient update_plugins de WordPress (su actualizador usa esa URL sin pasar por cached()).
      */
@@ -117,6 +113,10 @@ class Updater
         }
     }
 
+    /**
+     * Respuesta guardada, o null si no hay o ha caducado. Nunca devuelve un
+     * package si la licencia local no es válida en este momento.
+     */
     public static function cached()
     {
         $cache = get_option(self::CACHE_OPTION);
