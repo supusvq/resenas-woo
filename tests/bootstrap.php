@@ -48,7 +48,21 @@ function get_bloginfo($show = '') { return '6.8'; }
 function current_time($type) { return gmdate('Y-m-d H:i:s'); }
 function wp_timezone() { return new DateTimeZone('Europe/Madrid'); }
 function wp_json_encode($data) { return (string) json_encode($data); }
-function current_user_can($cap) { return true; }
+// Permisos del usuario de prueba: todo permitido salvo lo que diga $GLOBALS['caps'].
+$GLOBALS['caps'] = [];
+function current_user_can($cap) { return $GLOBALS['caps'][$cap] ?? true; }
+function get_current_user_id() { return 1; }
+function check_admin_referer($action) { $GLOBALS['nonce_checked'][] = $action; return 1; }
+
+class TestRedirect extends Exception {}
+class TestDie extends Exception {}
+function wp_safe_redirect($url) { throw new TestRedirect((string) $url); }
+function wp_die($message = '', $title = '', $args = []) { throw new TestDie((string) $message); }
+
+$GLOBALS['transients'] = [];
+function set_transient($name, $value, $ttl = 0) { $GLOBALS['transients'][$name] = $value; return true; }
+function get_transient($name) { return $GLOBALS['transients'][$name] ?? false; }
+function delete_transient($name) { unset($GLOBALS['transients'][$name]); return true; }
 
 function get_option($name, $default = false)
 {
@@ -79,7 +93,8 @@ function delete_site_transient($name)
     unset($GLOBALS['site_transients'][$name]);
     return true;
 }
-function is_multisite() { return false; }
+$GLOBALS['multisite'] = false;
+function is_multisite() { return $GLOBALS['multisite']; }
 
 function wp_generate_uuid4()
 {

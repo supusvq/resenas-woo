@@ -7,13 +7,21 @@
  * PELIGRO: el uninstall.php de la 2.x BORRA las tablas mrg_reviews y
  * mrg_email_logs y la opción mrg_settings. Si se borra la versión antigua desde
  * Plugins, se pierden todas las reseñas y el historial. Por eso aquí:
+ *  - al activar la 3.0 (y en cada admin_init mientras exista la carpeta antigua)
+ *    se NEUTRALIZA el uninstall.php antiguo: se sustituye por un archivo que no
+ *    hace nada. Así la protección sigue aunque la 3.0 se desactive después;
  *  - al activar la 3.0 se desactiva la antigua (sin tocar datos);
- *  - se ofrece un borrado seguro que quita la carpeta SIN ejecutar su desinstalador;
+ *  - se ofrece un borrado seguro que quita la carpeta sin seguir enlaces;
  *  - se quita el enlace "Borrar" de la antigua y se frena su desinstalación.
  *
+ * WordPress (uninstall_plugin() en wp-admin/includes/plugin.php) ejecuta
+ * uninstall.php si el archivo existe y, solo si no existe, el callback de
+ * register_uninstall_hook guardado en la opción uninstall_plugins. La 2.x no
+ * registra ese callback, así que neutralizar uninstall.php basta.
+ *
  * Esta clase se carga también con require_once explícito desde el archivo
- * principal (cuando otra copia ya ha registrado su autoloader), así que no debe
- * depender de clases que la 2.x no tenga, salvo Activator.
+ * principal (cuando la 2.x ya ha cargado y definido MRG_*), así que no usa las
+ * constantes MRG_*: su propia carpeta sale de __DIR__.
  */
 
 namespace MRG;
@@ -28,6 +36,32 @@ class Migration
     const OLD_BASENAME = 'resenas_woo/mis-resenas-de-google.php';
     const NEW_BASENAME = 'resenas-woo/mis-resenas-de-google.php';
     const DELETE_DATA_OPTION = 'mrg_delete_data_on_uninstall';
+    const UNINSTALL_ERROR_OPTION = 'mrg_old_uninstall_error';
+
+    // Marca del uninstall.php neutralizado (para no reescribirlo en cada carga).
+    const STUB_MARKER = 'MRG-UNINSTALL-NEUTRALIZADO';
+
+    /**
+     * Contenido que sustituye al uninstall.php de la 2.x. Usa "return" y no
+     * "exit": uninstall_plugin() lo incluye dentro de la petición de borrado y un
+     * exit cortaría el borrado de archivos a medias.
+     */
+    const STUB = "<?php\n/**\n * MRG-UNINSTALL-NEUTRALIZADO\n *\n * Reseñas Woo 3 ha sustituido el desinstalador de la versión 2.x porque borraba\n * las tablas y ajustes que comparte con la versión nueva. Borrar esta carpeta\n * ya no elimina reseñas, historial ni ajustes.\n */\nreturn;\n";
+
+    /**
+     * Carpeta de ESTA copia (la que contiene includes/Migration.php).
+     */
+    public static function own_dir()
+    {
+        return dirname(__DIR__);
+    }
+
+    private static function is_old_copy($own_dir = null)
+    {
+        $own_dir = null === $own_dir ? self::own_dir() : $own_dir;
+
+        return self::OLD_SLUG === basename(self::normalize($own_dir));
+    }
 
     /* ------------------------------------------------------------------ */
     /* Activación                                                         */
@@ -39,6 +73,9 @@ class Migration
      */
     public static function on_activate()
     {
+        // 0. Antes que nada, desarmar el desinstalador de la 2.x.
+        self::maybe_neutralize_old_uninstall();
+
         // 1. Desactivar la antigua en silencio (sin su desactivador; no toca datos).
         if (function_exists('is_plugin_active') && function_exists('deactivate_plugins')) {
             if (is_plugin_active(self::OLD_BASENAME)) {
@@ -64,17 +101,91 @@ class Migration
     }
 
     /* ------------------------------------------------------------------ */
+    /* Neutralizar el desinstalador de la 2.x                             */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Sustituye WP_PLUGIN_DIR/resenas_woo/uninstall.php por STUB.
+     * Devuelve '' si queda neutralizado (o no hay nada que hacer) o el motivo.
+     *
+     * @param string|null $plugins_dir WP_PLUGIN_DIR (parámetro para pruebas).
+     * @param string|null $own_dir     Carpeta de esta copia (parámetro para pruebas).
+     */
+    public static function neutralize_old_uninstall($plugins_dir = null, $own_dir = null)
+    {
+        $plugins_dir = null === $plugins_dir ? (defined('WP_PLUGIN_DIR') ? WP_PLUGIN_DIR : '') : $plugins_dir;
+        $own_dir = null === $own_dir ? self::own_dir() : $own_dir;
+
+        if ('' === self::normalize($plugins_dir) || self::is_old_copy($own_dir)) {
+            return '';
+        }
+
+        $dir = self::normalize($plugins_dir) . '/' . self::OLD_SLUG;
+        $file = $dir . '/uninstall.php';
+
+        if (!file_exists($file) && !is_link($file)) {
+            return ''; // Sin carpeta antigua o sin desinstalador: nada que desarmar.
+        }
+        if (is_link($dir) || is_link($file)) {
+            return __('El desinstalador de la versión antigua es un enlace simbólico y no se ha tocado.', 'mis-resenas-de-google');
+        }
+
+        $real_file = realpath($file);
+        $real_plugins = realpath($plugins_dir);
+        if (false === $real_file || false === $real_plugins
+            || self::normalize($real_file) !== self::normalize($real_plugins) . '/' . self::OLD_SLUG . '/uninstall.php') {
+            return __('El desinstalador de la versión antigua no está donde se esperaba y no se ha tocado.', 'mis-resenas-de-google');
+        }
+
+        $own_real = realpath($own_dir);
+        if (false !== $own_real && 0 === strpos(self::normalize($real_file) . '/', self::normalize($own_real) . '/')) {
+            return ''; // Sería el desinstalador de esta misma copia.
+        }
+
+        if (false !== strpos((string) @file_get_contents($real_file), self::STUB_MARKER)) {
+            return ''; // Ya neutralizado.
+        }
+
+        if (!is_writable($real_file) || false === @file_put_contents($real_file, self::STUB, LOCK_EX)) {
+            return __('No se ha podido desarmar el desinstalador de la versión antigua (permisos). No la borres desde Plugins: borraría las reseñas.', 'mis-resenas-de-google');
+        }
+
+        clearstatcache(true, $real_file);
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($real_file, true);
+        }
+
+        return false !== strpos((string) file_get_contents($real_file), self::STUB_MARKER)
+            ? ''
+            : __('No se ha podido comprobar el desinstalador de la versión antigua.', 'mis-resenas-de-google');
+    }
+
+    /**
+     * Neutraliza y guarda el resultado para el aviso del admin. Nunca lanza.
+     */
+    public static function maybe_neutralize_old_uninstall()
+    {
+        $error = self::neutralize_old_uninstall();
+
+        if ('' === $error) {
+            delete_option(self::UNINSTALL_ERROR_OPTION);
+        } else {
+            update_option(self::UNINSTALL_ERROR_OPTION, $error, false);
+            if (function_exists('error_log')) {
+                error_log('[Reseñas Woo] ' . $error);
+            }
+        }
+
+        return $error;
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Detección                                                          */
     /* ------------------------------------------------------------------ */
 
     /**
      * True si la versión antigua está marcada como activa (sitio o red) y su
      * archivo existe. Lo usa el archivo principal antes de cargar nada.
-     *
-     * @param array  $active_plugins   Opción active_plugins.
-     * @param array  $network_plugins  Opción de red active_sitewide_plugins (claves).
-     * @param string $plugins_dir      WP_PLUGIN_DIR.
-     * @param string $own_basename     Basename de esta copia.
      */
     public static function old_is_active(array $active_plugins, array $network_plugins, $plugins_dir, $own_basename)
     {
@@ -91,7 +202,7 @@ class Migration
      */
     public static function old_folder_present()
     {
-        if (!defined('WP_PLUGIN_DIR') || self::OLD_BASENAME === MRG_BASENAME) {
+        if (!defined('WP_PLUGIN_DIR') || self::is_old_copy()) {
             return false;
         }
 
@@ -111,13 +222,28 @@ class Migration
     }
 
     /**
+     * Motivo por el que el usuario actual no puede borrar la carpeta antigua,
+     * o '' si puede.
+     *
+     * En multisitio se desactiva siempre: comprobar que la 2.x no está activa en
+     * ningún sitio de la red no compensa el riesgo, y su desinstalador ya está
+     * neutralizado, así que dejar la carpeta no pone datos en peligro.
+     */
+    public static function removal_blocked_reason()
+    {
+        if (function_exists('is_multisite') && is_multisite()) {
+            return __('En una instalación multisitio el borrado desde aquí está desactivado. Pide a quien administra la red que borre la carpeta wp-content/plugins/resenas_woo por FTP cuando la versión antigua no esté activa en ningún sitio.', 'mis-resenas-de-google');
+        }
+        if (!current_user_can('delete_plugins')) {
+            return __('Tu usuario no puede borrar plugins en esta web (o la edición de archivos está bloqueada con DISALLOW_FILE_MODS). Borra la carpeta wp-content/plugins/resenas_woo por FTP.', 'mis-resenas-de-google');
+        }
+
+        return '';
+    }
+
+    /**
      * Valida que $dir es exactamente la carpeta de la versión antigua y que se
      * puede borrar. Devuelve '' si todo está bien o el motivo en español.
-     *
-     * @param string $dir         Carpeta que se quiere borrar.
-     * @param string $plugins_dir WP_PLUGIN_DIR.
-     * @param string $own_dir     Carpeta de esta copia (MRG_PATH).
-     * @param bool   $old_active  Si la versión antigua sigue activa.
      */
     public static function validate_old_dir($dir, $plugins_dir, $own_dir, $old_active)
     {
@@ -160,31 +286,94 @@ class Migration
     }
 
     /**
-     * Borra la carpeta antigua con WP_Filesystem, sin ejecutar su uninstall.php.
+     * True si $path es un enlace simbólico o algo que se comporta como tal. En
+     * Windows is_link() no detecta las uniones (junctions): se compara además la
+     * ruta real con la del padre + el nombre; si no coinciden, apunta a otro sitio.
+     */
+    public static function is_link_like($path)
+    {
+        if (is_link($path)) {
+            return true;
+        }
+        if (!file_exists($path)) {
+            return false;
+        }
+        $real = realpath($path);
+        $parent = realpath(dirname($path));
+        if (false === $real || false === $parent) {
+            return true; // Ante la duda, no se entra.
+        }
+        $expected = self::normalize($parent) . '/' . basename(self::normalize($path));
+        $real = self::normalize($real);
+        if ('\\' === DIRECTORY_SEPARATOR) {
+            return strtolower($real) !== strtolower($expected);
+        }
+
+        return $real !== $expected;
+    }
+
+    /**
+     * Borrado recursivo que NUNCA sigue enlaces: un enlace simbólico (o unión de
+     * Windows) se quita a sí mismo, sin entrar en lo que apunta.
+     *
+     * @param string        $path    Ruta a borrar.
+     * @param callable|null $is_link Detector de enlaces (sustituible en pruebas).
+     * @return bool True si se borró todo.
+     */
+    public static function delete_tree($path, $is_link = null)
+    {
+        $is_link = $is_link ?: [__CLASS__, 'is_link_like'];
+
+        if (call_user_func($is_link, $path)) {
+            // En Windows un enlace a carpeta se quita con rmdir, no con unlink.
+            return @unlink($path) || @rmdir($path);
+        }
+        if (is_dir($path)) {
+            $entries = @scandir($path);
+            if (false === $entries) {
+                return false;
+            }
+            $ok = true;
+            foreach ($entries as $entry) {
+                if ('.' === $entry || '..' === $entry) {
+                    continue;
+                }
+                $ok = self::delete_tree($path . '/' . $entry, $is_link) && $ok;
+            }
+            return $ok && @rmdir($path);
+        }
+        if (file_exists($path)) {
+            return @unlink($path);
+        }
+
+        return true;
+    }
+
+    /**
+     * Borra la carpeta antigua sin ejecutar su uninstall.php y sin seguir enlaces.
      *
      * @throws \RuntimeException Con el motivo si no se puede.
      */
     public static function delete_old_folder()
     {
+        $blocked = self::removal_blocked_reason();
+        if ('' !== $blocked) {
+            throw new \RuntimeException($blocked);
+        }
+
         if (!function_exists('is_plugin_active')) {
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
         }
 
         $dir = WP_PLUGIN_DIR . '/' . self::OLD_SLUG;
         $active = is_plugin_active(self::OLD_BASENAME) || is_plugin_active_for_network(self::OLD_BASENAME);
-        $error = self::validate_old_dir($dir, WP_PLUGIN_DIR, MRG_PATH, $active);
+        $error = self::validate_old_dir($dir, WP_PLUGIN_DIR, self::own_dir(), $active);
         if ('' !== $error) {
             throw new \RuntimeException($error);
         }
 
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        global $wp_filesystem;
-        if (!WP_Filesystem() || !is_object($wp_filesystem)) {
-            throw new \RuntimeException(__('WordPress no puede borrar archivos en este servidor. Borra por FTP la carpeta wp-content/plugins/resenas_woo (no uses el botón Borrar de Plugins).', 'mis-resenas-de-google'));
-        }
-
-        if (!$wp_filesystem->delete(realpath($dir), true, 'd')) {
-            throw new \RuntimeException(__('No se pudo borrar la carpeta antigua. Bórrala por FTP: wp-content/plugins/resenas_woo.', 'mis-resenas-de-google'));
+        if (!self::delete_tree(realpath($dir))) {
+            throw new \RuntimeException(__('No se pudo borrar del todo la carpeta antigua. Termina de borrarla por FTP: wp-content/plugins/resenas_woo (no uses el botón Borrar de Plugins).', 'mis-resenas-de-google'));
         }
 
         if (function_exists('wp_clean_plugins_cache')) {
@@ -200,6 +389,20 @@ class Migration
     {
         add_filter('plugin_action_links_' . self::OLD_BASENAME, [__CLASS__, 'old_action_links']);
         add_action('pre_uninstall_plugin', [__CLASS__, 'block_old_uninstall']);
+        add_action('admin_init', [__CLASS__, 'admin_init']);
+    }
+
+    /**
+     * Mientras exista la carpeta antigua, se asegura de que su desinstalador está
+     * desarmado (por si se reinstaló la 2.x encima).
+     */
+    public static function admin_init()
+    {
+        if (self::old_folder_present()) {
+            self::maybe_neutralize_old_uninstall();
+        } elseif (false !== get_option(self::UNINSTALL_ERROR_OPTION, false)) {
+            delete_option(self::UNINSTALL_ERROR_OPTION);
+        }
     }
 
     /**
@@ -207,7 +410,7 @@ class Migration
      */
     public static function old_action_links($actions)
     {
-        if (self::OLD_BASENAME === MRG_BASENAME) {
+        if (self::is_old_copy()) {
             return $actions;
         }
         unset($actions['delete']);
@@ -221,12 +424,12 @@ class Migration
     }
 
     /**
-     * Frena la desinstalación de la 2.x desde Plugins: su uninstall.php borraría
-     * las reseñas que usa esta versión.
+     * Frena la desinstalación de la 2.x desde Plugins mientras la 3.0 esté
+     * activa. Es una segunda barrera: la primera es el uninstall.php neutralizado.
      */
     public static function block_old_uninstall($plugin)
     {
-        if (self::OLD_BASENAME !== $plugin || self::OLD_BASENAME === MRG_BASENAME) {
+        if (self::OLD_BASENAME !== $plugin || self::is_old_copy()) {
             return;
         }
 

@@ -10,7 +10,8 @@
 $tmp = rtrim(str_replace('\\', '/', $argv[1]), '/');
 define('ABSPATH', $tmp . '/wp/');
 define('WP_PLUGIN_DIR', $tmp . '/plugins');
-define('WP_UNINSTALL_PLUGIN', 'resenas-woo/mis-resenas-de-google.php');
+$folder = $argv[3] ?? 'resenas-woo';
+define('WP_UNINSTALL_PLUGIN', $folder . '/mis-resenas-de-google.php');
 
 require dirname(__DIR__) . '/bootstrap.php';
 
@@ -30,10 +31,11 @@ class TestWpdb
     public function query($q) { $this->queries[] = $q; return true; }
     public function get_var($q) { $this->queries[] = $q; return null; }
 }
+$GLOBALS['folder'] = $folder;
 $GLOBALS['wpdb'] = new TestWpdb();
 
 (function () use ($tmp) {
-    include $tmp . '/plugins/resenas-woo/uninstall.php';
+    include $tmp . '/plugins/' . $GLOBALS['folder'] . '/uninstall.php';
 })();
 
 echo json_encode([

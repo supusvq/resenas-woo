@@ -16,7 +16,7 @@ define('WP_PLUGIN_DIR', $tmp . '/plugins');
 
 require dirname(__DIR__) . '/bootstrap.php';
 
-$NEW_MAIN = dirname(__DIR__, 2) . '/mis-resenas-de-google.php';
+$NEW_MAIN = WP_PLUGIN_DIR . '/resenas-woo/mis-resenas-de-google.php';
 $OLD_MAIN = WP_PLUGIN_DIR . '/resenas_woo/mis-resenas-de-google.php';
 $NEW = 'resenas-woo/mis-resenas-de-google.php';
 $OLD = 'resenas_woo/mis-resenas-de-google.php';
@@ -72,6 +72,8 @@ register_shutdown_function(function () use (&$result, &$warnings) {
     $result['cron'] = array_map(function ($e) { return $e['hook']; }, $GLOBALS['cron']);
     $result['drops'] = count(array_filter($GLOBALS['wpdb']->queries, function ($q) { return stripos($q, 'DROP') !== false; }));
     $result['dbdelta'] = $GLOBALS['dbdelta'] ?? 0;
+    $old_un = WP_PLUGIN_DIR . '/resenas_woo/uninstall.php';
+    $result['old_uninstall_neutralized'] = is_file($old_un) && strpos((string) file_get_contents($old_un), 'MRG-UNINSTALL-NEUTRALIZADO') !== false;
     echo json_encode($result);
 });
 

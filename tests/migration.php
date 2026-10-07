@@ -21,10 +21,16 @@ use MRG\Migration;
 
 $root = dirname(__DIR__);
 $tmp = str_replace('\\', '/', sys_get_temp_dir()) . '/mrg-migration-' . getmypid();
+define('WP_PLUGIN_DIR', $tmp . '/plugins'); // Para delete_old_folder() en la sección 9.
 
 function rrmdir($dir)
 {
-    if (!is_dir($dir) || is_link($dir)) {
+    if (Migration::is_link_like($dir)) {
+        @unlink($dir) || @rmdir($dir);
+        return;
+    }
+    if (!is_dir($dir)) {
+        @chmod($dir, 0644);
         @unlink($dir);
         return;
     }
@@ -36,6 +42,17 @@ function rrmdir($dir)
     @rmdir($dir);
 }
 
+function rcopy($src, $dst)
+{
+    @mkdir($dst, 0777, true);
+    foreach (scandir($src) as $f) {
+        if ($f === '.' || $f === '..') {
+            continue;
+        }
+        is_dir($src . '/' . $f) ? rcopy($src . '/' . $f, $dst . '/' . $f) : copy($src . '/' . $f, $dst . '/' . $f);
+    }
+}
+
 function setup_env($tmp, $root, $with_old = true)
 {
     rrmdir($tmp);
@@ -43,7 +60,11 @@ function setup_env($tmp, $root, $with_old = true)
     mkdir($tmp . '/plugins/resenas-woo', 0777, true);
     file_put_contents($tmp . '/wp/wp-admin/includes/upgrade.php', "<?php\nfunction dbDelta(\$sql) { \$GLOBALS['dbdelta'] = (\$GLOBALS['dbdelta'] ?? 0) + 1; return []; }\n");
     file_put_contents($tmp . '/wp/wp-admin/includes/plugin.php', "<?php\n");
-    copy($root . '/uninstall.php', $tmp . '/plugins/resenas-woo/uninstall.php');
+    // Copia de la 3.0 del árbol de trabajo, en su carpeta real resenas-woo/.
+    foreach (['mis-resenas-de-google.php', 'uninstall.php'] as $f) {
+        copy($root . '/' . $f, $tmp . '/plugins/resenas-woo/' . $f);
+    }
+    rcopy($root . '/includes', $tmp . '/plugins/resenas-woo/includes');
 
     if ($with_old) {
         // Código real de la 2.12.3 (rama main).
@@ -168,9 +189,9 @@ check('rechaza si ya no existe', Migration::validate_old_dir($old_dir, $plugins,
 
 // ---------------------------------------------------------------------
 echo "\n6. Desinstalación de la 3.0\n";
-function uninstall_run($tmp, array $options)
+function uninstall_run($tmp, array $options, $folder = 'resenas-woo')
 {
-    $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/fixtures/uninstall.php') . ' ' . escapeshellarg($tmp) . ' ' . escapeshellarg(base64_encode(json_encode($options))) . ' 2>&1';
+    $cmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/fixtures/uninstall.php') . ' ' . escapeshellarg($tmp) . ' ' . escapeshellarg(base64_encode(json_encode($options))) . ' ' . escapeshellarg($folder) . ' 2>&1';
     $out = (string) shell_exec($cmd);
     $json = json_decode(substr($out, (int) strpos($out, '{')), true);
     if (!is_array($json)) {
@@ -196,6 +217,148 @@ check('con la opción marcada conserva installation_id', ($u['options']['mrg_ins
 setup_env($tmp, $root, true);
 $u = uninstall_run($tmp, $base + ['mrg_delete_data_on_uninstall' => 1]);
 check('con la versión antigua presente NO borra nada', count(array_filter($u['queries'], function ($q) { return stripos($q, 'DROP') !== false; })) === 0 && isset($u['options']['mrg_settings']));
+
+// ---------------------------------------------------------------------
+echo "\n7. Desinstalador antiguo neutralizado (regresión Codex #1)\n";
+setup_env($tmp, $root, true);
+$old_un = $plugins . '/resenas_woo/uninstall.php';
+$base_old = ['mrg_settings' => ['x' => 1], 'mrg_version' => '2.12.3', 'mrg_installation_id' => 'uuid-1'];
+$u = uninstall_run($tmp, $base_old, 'resenas_woo');
+check('control: el uninstall.php ORIGINAL de la 2.x borra tablas y ajustes', count(array_filter($u['queries'], function ($q) { return stripos($q, 'DROP TABLE') !== false; })) === 2 && !isset($u['options']['mrg_settings']));
+
+$r = scenario('activate_new_while_old_active', $tmp);
+check('activar la 3.0 neutraliza el uninstall.php antiguo', $r['old_uninstall_neutralized'] === true && $r['fatal'] === null && $r['warnings'] === []);
+$u = uninstall_run($tmp, $base_old, 'resenas_woo');
+check('borrar la 2.x desde Plugins (3.0 inactiva) ya no borra tablas', count(array_filter($u['queries'], function ($q) { return stripos($q, 'DROP') !== false; })) === 0);
+check('borrar la 2.x desde Plugins ya no borra ajustes', isset($u['options']['mrg_settings'], $u['options']['mrg_version']));
+
+$stub = file_get_contents($old_un);
+check('el stub usa return y no exit (no corta el borrado de archivos)', strpos($stub, 'return;') !== false && strpos($stub, 'exit') === false);
+check('neutralizar dos veces no reescribe (idempotente)', Migration::neutralize_old_uninstall($plugins, $own) === '' && file_get_contents($old_un) === $stub);
+
+setup_env($tmp, $root, true);
+check('neutralizar desde la propia carpeta antigua no hace nada', Migration::neutralize_old_uninstall($plugins, $plugins . '/resenas_woo') === '' && strpos(file_get_contents($old_un), 'DROP TABLE') !== false);
+check('sin WP_PLUGIN_DIR no hace nada', Migration::neutralize_old_uninstall('', $own) === '');
+check('2.x reinstalada encima: se vuelve a neutralizar', Migration::neutralize_old_uninstall($plugins, $own) === '' && strpos(file_get_contents($old_un), Migration::STUB_MARKER) !== false);
+
+setup_env($tmp, $root, true);
+chmod($old_un, 0444);
+$err = Migration::neutralize_old_uninstall($plugins, $own);
+check('sin permiso de escritura: devuelve el motivo', $err !== '' && strpos(file_get_contents($old_un), 'DROP TABLE') !== false);
+chmod($old_un, 0644);
+
+setup_env($tmp, $root, true);
+unlink($old_un);
+$outside = $tmp . '/fuera-uninstall.php';
+file_put_contents($outside, "<?php // archivo ajeno\n");
+if (@symlink($outside, $old_un)) {
+    check('uninstall.php enlace simbólico: no se toca', Migration::neutralize_old_uninstall($plugins, $own) !== '' && file_get_contents($outside) === "<?php // archivo ajeno\n");
+    unlink($old_un);
+} else {
+    echo "  SKIP uninstall.php enlace simbólico (este sistema no deja crear symlinks)\n";
+}
+check('sin uninstall.php antiguo: nada que hacer', Migration::neutralize_old_uninstall($plugins, $own) === '');
+
+// La carpeta resenas_woo es una unión/enlace hacia otro sitio: no se escribe nada fuera.
+setup_env($tmp, $root, true);
+$elsewhere = $tmp . '/otra-carpeta';
+rename($plugins . '/resenas_woo', $elsewhere);
+$made = @symlink($elsewhere, $plugins . '/resenas_woo');
+if (!$made && DIRECTORY_SEPARATOR === '\\') {
+    exec('cmd /c mklink /J "' . str_replace('/', '\\', $plugins . '/resenas_woo') . '" "' . str_replace('/', '\\', $elsewhere) . '" >NUL 2>&1', $o, $code);
+    $made = $code === 0 && is_dir($plugins . '/resenas_woo');
+}
+if ($made) {
+    check('carpeta antigua enlazada fuera: se niega a escribir', Migration::neutralize_old_uninstall($plugins, $own) !== '' && strpos(file_get_contents($elsewhere . '/uninstall.php'), 'DROP TABLE') !== false);
+    @unlink($plugins . '/resenas_woo') || @rmdir($plugins . '/resenas_woo');
+} else {
+    echo "  SKIP carpeta antigua enlazada (no se pudo crear enlace ni unión)\n";
+}
+
+// ---------------------------------------------------------------------
+echo "\n8. Borrado recursivo sin seguir enlaces (regresión Codex #2)\n";
+$victim = $tmp . '/fuera';
+
+// a) Con un enlace real (symlink o unión de Windows) dentro de la carpeta antigua.
+setup_env($tmp, $root, true);
+@mkdir($victim, 0777, true);
+file_put_contents($victim . '/importante.txt', 'no borrar');
+$link = $plugins . '/resenas_woo/includes/enlace';
+$made = @symlink($victim, $link);
+if (!$made && DIRECTORY_SEPARATOR === '\\') {
+    exec('cmd /c mklink /J "' . str_replace('/', '\\', $link) . '" "' . str_replace('/', '\\', $victim) . '" >NUL 2>&1', $o, $code);
+    $made = $code === 0 && is_dir($link);
+}
+if ($made) {
+    check('el enlace (o unión de Windows) se detecta como enlace', Migration::is_link_like($link));
+    check('una carpeta normal no se toma por enlace', !Migration::is_link_like($plugins . '/resenas_woo/includes'));
+    check('delete_tree borra la carpeta antigua', Migration::delete_tree($plugins . '/resenas_woo') && !file_exists($plugins . '/resenas_woo'));
+    check('lo apuntado por el enlace sigue intacto', is_file($victim . '/importante.txt') && file_get_contents($victim . '/importante.txt') === 'no borrar');
+} else {
+    echo "  SKIP enlace real (no se pudo crear symlink ni unión)\n";
+}
+
+// b) Con detector simulado: una carpeta marcada como enlace no se recorre.
+setup_env($tmp, $root, true);
+$fake = $plugins . '/resenas_woo/falso-enlace';
+mkdir($fake);
+file_put_contents($fake . '/dentro.txt', 'x');
+$seen = [];
+$ok = Migration::delete_tree($plugins . '/resenas_woo', function ($p) use ($fake, &$seen) {
+    $seen[] = str_replace('\\', '/', $p);
+    return str_replace('\\', '/', $p) === $fake;
+});
+check('no entra en lo que el detector marca como enlace', is_file($fake . '/dentro.txt') && !in_array($fake . '/dentro.txt', $seen, true));
+check('informa de que no pudo borrarlo todo', $ok === false);
+check('borra el resto de la carpeta', !is_file($plugins . '/resenas_woo/mis-resenas-de-google.php'));
+
+// ---------------------------------------------------------------------
+echo "\n9. Permisos y multisitio en el borrado (regresión Codex #3 y #4)\n";
+require MRG_PATH . 'includes/Admin/LicensePage.php';
+$page = new \MRG\Admin\LicensePage();
+
+function run_remove($page)
+{
+    $GLOBALS['transients'] = [];
+    $_POST = ['confirm' => '1'];
+    try {
+        $page->handle_remove_old();
+    } catch (TestRedirect $e) {
+        return $GLOBALS['transients']['mrg_license_notice_1'] ?? null;
+    } catch (TestDie $e) {
+        return ['type' => 'die', 'message' => $e->getMessage()];
+    }
+    return null;
+}
+
+setup_env($tmp, $root, true);
+$GLOBALS['options']['active_plugins'] = [$NEW];
+
+$GLOBALS['caps'] = ['delete_plugins' => false];
+$n = run_remove($page);
+check('sin delete_plugins: no borra', is_dir($plugins . '/resenas_woo') && ($n['type'] ?? '') === 'error');
+check('sin delete_plugins: lo explica', strpos($n['message'] ?? '', 'DISALLOW_FILE_MODS') !== false);
+check('sin delete_plugins: removal_blocked_reason lo indica', Migration::removal_blocked_reason() !== '');
+check('se comprueba el nonce', in_array('mrg_remove_old', $GLOBALS['nonce_checked'] ?? [], true));
+
+$GLOBALS['caps'] = ['manage_options' => false];
+$n = run_remove($page);
+check('sin manage_options: wp_die', ($n['type'] ?? '') === 'die' && is_dir($plugins . '/resenas_woo'));
+
+$GLOBALS['caps'] = [];
+$GLOBALS['multisite'] = true;
+$n = run_remove($page);
+check('multisitio: borrado desactivado', is_dir($plugins . '/resenas_woo') && strpos($n['message'] ?? '', 'multisitio') !== false);
+$GLOBALS['multisite'] = false;
+
+$GLOBALS['options']['active_plugins'] = [$NEW, $OLD];
+$n = run_remove($page);
+check('antigua activa: no borra', is_dir($plugins . '/resenas_woo') && ($n['type'] ?? '') === 'error');
+
+$GLOBALS['options']['active_plugins'] = [$NEW];
+$n = run_remove($page);
+check('con permisos, sin multisitio e inactiva: borra la carpeta', !file_exists($plugins . '/resenas_woo') && ($n['type'] ?? '') === 'success');
+check('la carpeta nueva sigue', is_file($plugins . '/resenas-woo/mis-resenas-de-google.php'));
 
 rrmdir($tmp);
 summary('migration.php');

@@ -77,16 +77,23 @@ class LicensePage
     {
         $this->guard('mrg_remove_old');
 
+        // Además de manage_options: poder borrar plugins (falso con DISALLOW_FILE_MODS)
+        // y no estar en multisitio (ver Migration::removal_blocked_reason()).
+        $blocked = Migration::removal_blocked_reason();
+        if ('' !== $blocked) {
+            $this->done('error', $blocked);
+        }
+
         if (empty($_POST['confirm'])) {
             $this->done('error', __('Marca la casilla de confirmación para borrar la versión antigua.', 'mis-resenas-de-google'));
         }
 
         try {
             Migration::delete_old_folder();
-            $this->done('success', __('Versión antigua eliminada. Tus reseñas y ajustes siguen intactos.', 'mis-resenas-de-google'));
         } catch (\Throwable $e) {
             $this->done('error', $e->getMessage());
         }
+        $this->done('success', __('Versión antigua eliminada. Tus reseñas y ajustes siguen intactos.', 'mis-resenas-de-google'));
     }
 
     public function handle_data_settings()
@@ -134,6 +141,13 @@ class LicensePage
 
         $screen = function_exists('get_current_screen') ? get_current_screen() : null;
         $on_plugins = $screen && 'plugins' === $screen->id;
+
+        // No se pudo desarmar el desinstalador de la 2.x: aviso en todo el admin.
+        $uninstall_error = get_option(Migration::UNINSTALL_ERROR_OPTION, '');
+        if ('' !== (string) $uninstall_error && Migration::old_folder_present()) {
+            echo '<div class="notice notice-error"><p><strong>' . esc_html__('Reseñas Woo:', 'mis-resenas-de-google') . '</strong> '
+                . esc_html((string) $uninstall_error) . '</p></div>';
+        }
 
         // Versión antigua presente: en Plugins y en las pantallas del plugin.
         if (Migration::old_folder_present() && ($on_plugins || $this->is_plugin_screen())) {
@@ -266,7 +280,10 @@ class LicensePage
         echo '<p><strong>' . esc_html__('No borres la versión antigua desde Plugins: su desinstalador borra las reseñas.', 'mis-resenas-de-google') . '</strong></p>';
         echo '<p>' . esc_html__('Este botón quita la carpeta resenas_woo sin ejecutar su desinstalador. Tus reseñas, emails y ajustes se quedan como están.', 'mis-resenas-de-google') . '</p>';
 
-        if ($active) {
+        $blocked = Migration::removal_blocked_reason();
+        if ('' !== $blocked) {
+            echo '<p>' . esc_html($blocked) . '</p>';
+        } elseif ($active) {
             echo '<p>' . esc_html__('La versión antigua sigue activa. Desactívala primero en Plugins (desactivar no borra nada).', 'mis-resenas-de-google') . '</p>';
         } else {
             echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
