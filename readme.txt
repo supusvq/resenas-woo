@@ -72,7 +72,7 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 * Si la base de datos no guarda las reseñas importadas o sus ajustes, la importación gratis no se da por gastada.
 
 = 3.1.0 =
-* Versión gratis: sin licencia, cada web puede hacer una importación de reseñas de prueba a mano. El servicio la cuenta por dominio, así que reinstalar no da otra.
+* Versión gratis: sin licencia, cada web puede hacer una importación de reseñas de prueba a mano. El servicio la cuenta por dominio e IP, así que reinstalar no da otra.
 * La importación semanal automática sigue siendo de la licencia.
 
 = 3.0.1 =

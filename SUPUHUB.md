@@ -11,7 +11,7 @@ supuhub:
   update_uri: https://api.supudigital.es/products/resenaswoo
 
   free_features:
-    - una_importacion_gratis      # a mano; el servicio la cuenta por dominio (mrg_free_imports)
+    - una_importacion_gratis      # a mano; el servicio la cuenta por dominio+IP (mrg_free_imports)
     - mostrar_resenas_guardadas
     - emails_peticion_resena
     - administracion_y_datos

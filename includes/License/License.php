@@ -35,7 +35,7 @@ class License
     const OPTION = 'mrg_license';
     const INSTALL_OPTION = 'mrg_installation_id';
     // Marca de la importación gratis ya usada. Como el installation_id, no se borra al
-    // desinstalar; quien manda de verdad es el servicio, que la cuenta por dominio.
+    // desinstalar; quien manda de verdad es el servicio, que la cuenta por dominio e IP.
     const FREE_IMPORT_OPTION = 'mrg_free_import_used';
     const KEY_FORMAT = '/^[A-Z]{4,12}(-[A-Z0-9]{4}){3,5}$/';
 

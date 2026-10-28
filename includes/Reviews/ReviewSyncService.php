@@ -58,7 +58,7 @@ class ReviewSyncService
         if (is_wp_error($result)) {
             $data = $result->get_error_data();
             if ($free && is_array($data) && 403 === ($data['status'] ?? 0)) {
-                // El servicio cuenta la importación gratis por dominio: ya se usó.
+                // El servicio cuenta la importación gratis por dominio e IP: ya se usó.
                 \MRG\License\License::use_free_import();
                 return [
                     'added' => 0,
