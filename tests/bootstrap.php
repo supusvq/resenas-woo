@@ -72,6 +72,9 @@ function get_option($name, $default = false)
 }
 function update_option($name, $value, $autoload = null)
 {
+    if (($GLOBALS['fail_update_option'] ?? '') === $name) {
+        return false;
+    }
     $GLOBALS['options'][$name] = $value;
     return true;
 }

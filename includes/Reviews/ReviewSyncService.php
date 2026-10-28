@@ -131,7 +131,13 @@ class ReviewSyncService
         $settings['last_sync_timestamp'] = $current_timestamp;
         $settings['last_sync_datetime'] = $current_datetime;
 
-        update_option('mrg_settings', $settings);
+        // update_option() también da false si no cambia nada: vale lo que quedó guardado.
+        if (!update_option('mrg_settings', $settings) && get_option('mrg_settings') != $settings) {
+            return [
+                'added' => $added,
+                'error' => __('No se pudieron guardar los ajustes de la importación. Vuelve a intentarlo.', 'mis-resenas-de-google'),
+            ];
+        }
         $this->clear_review_transients();
 
         if ($free) {
