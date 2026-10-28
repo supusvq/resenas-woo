@@ -1,3 +1,4 @@
+import json
 import logging
 import sqlite3
 
@@ -150,6 +151,8 @@ def import_reviews(payload: ImportRequest, request: Request):
         # Licencia ANTES de servir caché o llamar a Apify: también se aplica a la caché.
         gate = LicenseGate()
         decision = gate.authorize(site, place, ip)
+        if decision.replay:
+            return ImportResponse(**json.loads(decision.replay))
         try:
             result = service.import_reviews(payload, ip=ip)
         except Exception:
@@ -158,7 +161,7 @@ def import_reviews(payload: ImportRequest, request: Request):
                 gate.release_free_import(site, ip, decision.free_token)
             raise
         if decision.free:
-            gate.confirm_free_import(site, ip, decision.free_token)
+            gate.confirm_free_import(site, ip, decision.free_token, result.model_dump_json())
         return result
     except LicenseDenied as exc:
         d = exc.decision

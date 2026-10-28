@@ -20,7 +20,7 @@ import sqlite3  # noqa: E402
 import license_gate  # noqa: E402
 from access_guard import GuardBusy  # noqa: E402
 from license_gate import (  # noqa: E402
-    FREE_PENDING_TTL, FREE_PER_IP_30D, GRACE_TTL, INVALID_TTL, MSG_GRATIS_EN_CURSO, MSG_GRATIS_IP, MSG_GRATIS_USADA, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
+    FREE_PENDING_TTL, FREE_PER_IP_30D, FREE_RETRY_TTL, GRACE_TTL, INVALID_TTL, MSG_GRATIS_EN_CURSO, MSG_GRATIS_IP, MSG_GRATIS_USADA, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
 )
 
 H = 3600
@@ -146,7 +146,7 @@ def test_enforce_bloquea_y_log_deja_pasar():
         g = LicenseGate(http_post=Stub(NO))
         d = g.authorize("otro.es", "k", "1.1.1.1")
         assert d.free
-        g.confirm_free_import("otro.es", "1.1.1.1", d.free_token)
+        g.confirm_free_import("otro.es", "1.1.1.1", d.free_token, "")
         e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1"))
         assert e.status_code == 403 and e.reason == "gratis_usada"
         # Sin site_url (clave ip:…) = sin licencia, sin preguntar a SupuHub.
@@ -360,7 +360,8 @@ def test_endpoint():
         with patch.object(license_gate, "_requests_post", Stub(NO)):
             r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata.es"}, headers={"X-Real-IP": "9.9.9.8"})
             assert r.status_code == 200, r.text  # su importación gratis
-            r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata.es"}, headers={"X-Real-IP": "9.9.9.8"})
+            otra = {**body, "maps_url": "https://www.google.com/maps/place/otra-ficha", "site_url": "https://pirata.es"}
+            r = c.post("/v1/import-reviews", json=otra, headers={"X-Real-IP": "9.9.9.8"})
             assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA, r.text
             r = c.post("/v1/import-reviews", json={"maps_url": body["maps_url"]}, headers={"X-Real-IP": "9.9.9.7"})
             assert r.status_code == 403
@@ -395,7 +396,7 @@ def test_importacion_gratis():
         # Una por (dominio, IP), con el mismo criterio de dominio que la licencia (www, mayúsculas).
         d = g.authorize("www.Gratis.es", "k", "1.1.1.1")
         assert d.allowed and d.free and d.reason == "importacion_gratis"
-        g.confirm_free_import("www.Gratis.es", "1.1.1.1", d.free_token)
+        g.confirm_free_import("www.Gratis.es", "1.1.1.1", d.free_token, "")
         e = denied(lambda: g.authorize("gratis.es", "otra", "1.1.1.1"))
         assert e.detail == MSG_GRATIS_USADA and e.status_code == 403
         # Desde otra IP no se gasta la prueba de esa web (el dominio no está acreditado).
@@ -418,14 +419,14 @@ def test_importacion_gratis():
         for i in range(FREE_PER_IP_30D):
             d = g.authorize(f"falso{i}.es", "k", "5.5.5.5")
             assert d.free
-            g.confirm_free_import(f"falso{i}.es", "5.5.5.5", d.free_token)
+            g.confirm_free_import(f"falso{i}.es", "5.5.5.5", d.free_token, "")
         e = denied(lambda: g.authorize("falso9.es", "k", "5.5.5.5"))
         # 429 y no 403: el cupo se recupera y el plugin no debe darla por gastada.
         assert e.reason == "gratis_tope_ip" and e.detail == MSG_GRATIS_IP and e.status_code == 429
         clock.t += 31 * 86400
         d = g.authorize("falso9.es", "k", "5.5.5.5")
         assert d.free, "pasados 30 días vuelve a haber"
-        g.confirm_free_import("falso9.es", "5.5.5.5", d.free_token)
+        g.confirm_free_import("falso9.es", "5.5.5.5", d.free_token, "")
         assert denied(lambda: g.authorize("falso0.es", "k", "5.5.5.5")).reason == "gratis_usada"
     finally:
         p.stop()
@@ -450,10 +451,10 @@ def test_importacion_gratis_en_curso_y_abandonada():
         assert b.free
         # A termina tarde: ni su fallo libera la reserva de B ni su éxito la da por usada.
         g.release_free_import("curso.es", "1.1.1.1", a.free_token)
-        g.confirm_free_import("curso.es", "1.1.1.1", a.free_token)
+        g.confirm_free_import("curso.es", "1.1.1.1", a.free_token, "")
         assert free_rows() == [("curso.es", "1.1.1.1", "pending")]
         assert denied(lambda: g.authorize("curso.es", "k", "1.1.1.1")).status_code == 409
-        g.confirm_free_import("curso.es", "1.1.1.1", b.free_token)
+        g.confirm_free_import("curso.es", "1.1.1.1", b.free_token, "")
         assert free_rows() == [("curso.es", "1.1.1.1", "used")]
         # Las pendientes abandonadas no cuentan para el tope de la IP.
         for i in range(FREE_PER_IP_30D):
@@ -493,6 +494,24 @@ def test_importacion_gratis_fallida_se_recupera():
             r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 200, r.text
             assert free_rows() == [("falla.es", "8.8.8.1", "used")], free_rows()
+            primera = r.json()
+            # El plugin no recibió la respuesta (timeout): el reintento de la misma ficha la recibe
+            # otra vez, sin otra importación (aunque la caché de la ficha ya no esté).
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+            conn.execute("DELETE FROM mrg_reviews_cache")
+            conn.commit()
+            conn.close()
+            with patch.object(ReviewImportService, "import_reviews", side_effect=AssertionError("no debe importar")):
+                r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 200 and r.json() == primera, r.text
+            # Otra ficha, u otra vez pasadas 24 h: 403.
+            otra = {**body, "maps_url": "https://www.google.com/maps/place/otra-ficha"}
+            r = c.post("/v1/import-reviews", json=otra, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+            conn.execute("UPDATE mrg_free_imports SET reserved_at = reserved_at - ?", (FREE_RETRY_TTL + 1,))
+            conn.commit()
+            conn.close()
             r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA
     finally:
