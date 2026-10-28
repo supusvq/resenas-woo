@@ -40,6 +40,7 @@ function esc_url($url) { return (string) $url; }
 function esc_url_raw($url) { return (string) $url; }
 function esc_js($text) { return addslashes((string) $text); }
 function sanitize_text_field($text) { return trim(strip_tags((string) $text)); }
+function wp_strip_all_tags($text) { return trim(strip_tags((string) $text)); }
 function sanitize_key($key) { return strtolower(preg_replace('/[^a-z0-9_\-]/i', '', (string) $key)); }
 function wp_unslash($value) { return $value; }
 function admin_url($path = '') { return 'https://cliente.es/wp-admin/' . $path; }

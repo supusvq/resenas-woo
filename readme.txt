@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 3.1.0
+Stable tag: 3.1.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -66,6 +66,9 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 3.1.1 =
+* Si el servicio rechaza la importación gratis con una respuesta que no es JSON, también queda marcada como usada.
 
 = 3.1.0 =
 * Versión gratis: sin licencia, cada web puede hacer una importación de reseñas de prueba a mano. El servicio la cuenta por dominio, así que reinstalar no da otra.

@@ -62,7 +62,8 @@ class ScraperClient
                 $message .= ' ' . sprintf(__('Respuesta: %s', 'mis-resenas-de-google'), $body_excerpt);
             }
 
-            return new \WP_Error('invalid_service_response', $message);
+            // El estado HTTP también aquí: un 403 sin JSON sigue siendo un 403.
+            return new \WP_Error('invalid_service_response', $message, ['status' => $code]);
         }
 
         if ($code < 200 || $code >= 300 || (isset($data['success']) && false === $data['success'])) {

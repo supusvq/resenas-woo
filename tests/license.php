@@ -74,9 +74,16 @@ update_option('mrg_settings', ['maps_url' => 'https://maps.google.com/?cid=1', '
 network_error();
 $r = (new ReviewSyncService())->sync();
 check('error de red: no gasta la gratis', empty($r['license_required']) && License::has_free_import());
+$GLOBALS['next_response'] = ['status' => 502, 'body' => '<html>Bad Gateway</html>'];
+(new ReviewSyncService())->sync();
+check('502 sin JSON: no gasta la gratis', License::has_free_import());
+$GLOBALS['next_response'] = ['status' => 403, 'body' => '<html>Forbidden</html>'];
+(new ReviewSyncService())->sync();
+check('403 sin JSON: también marca la gratis como usada', !License::has_free_import());
+delete_option(License::FREE_IMPORT_OPTION);
 respond(['detail' => 'Esta web ya ha usado su importación gratis de Reseñas Woo.'], 403);
 $r = (new ReviewSyncService())->sync();
-check('403 del servicio: llega a pedirlo', count($GLOBALS['requests']) === 2);
+check('403 del servicio: llega a pedirlo', count($GLOBALS['requests']) === 4);
 check('403 del servicio: marca la gratis como usada', !License::has_free_import() && !License::can_import());
 check('403 del servicio: resultado de licencia con su mensaje', !empty($r['license_required']) && strpos($r['error'], 'importación gratis') !== false);
 $GLOBALS['next_response'] = null;
