@@ -20,7 +20,7 @@ import sqlite3  # noqa: E402
 import license_gate  # noqa: E402
 from access_guard import GuardBusy  # noqa: E402
 from license_gate import (  # noqa: E402
-    GRACE_TTL, INVALID_TTL, MSG_GRATIS_USADA, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
+    FREE_PENDING_TTL, FREE_PER_IP_30D, GRACE_TTL, INVALID_TTL, MSG_GRATIS_EN_CURSO, MSG_GRATIS_IP, MSG_GRATIS_USADA, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
 )
 
 H = 3600
@@ -143,7 +143,9 @@ def test_enforce_bloquea_y_log_deja_pasar():
         assert not d.allowed and d.valid is False and d.status_code == 403 and d.detail == MSG_SIN_LICENCIA
         assert d.reason == "no_license"
         # La primera vez, la importación gratis; la segunda, bloqueada.
-        assert LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1").free
+        g = LicenseGate(http_post=Stub(NO))
+        assert g.authorize("otro.es", "k", "1.1.1.1").free
+        g.confirm_free_import("otro.es", "1.1.1.1")
         e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1"))
         assert e.status_code == 403 and e.reason == "gratis_usada"
         # Sin site_url (clave ip:…) = sin licencia, sin preguntar a SupuHub.
@@ -379,7 +381,7 @@ def test_endpoint():
 def free_rows():
     conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
     try:
-        return conn.execute("SELECT domain FROM mrg_free_imports ORDER BY domain").fetchall()
+        return conn.execute("SELECT domain, ip, status FROM mrg_free_imports ORDER BY domain, ip").fetchall()
     finally:
         conn.close()
 
@@ -387,34 +389,75 @@ def free_rows():
 def test_importacion_gratis():
     p = entorno("enforce")
     try:
-        # Una por dominio, con el mismo criterio de dominio que la licencia (www, mayúsculas).
-        d = LicenseGate(http_post=Stub(NO)).authorize("www.Gratis.es", "k", "1.1.1.1")
+        clock = Clock()
+        g = LicenseGate(http_post=Stub(NO), clock=clock)
+        # Una por (dominio, IP), con el mismo criterio de dominio que la licencia (www, mayúsculas).
+        d = g.authorize("www.Gratis.es", "k", "1.1.1.1")
         assert d.allowed and d.free and d.reason == "importacion_gratis"
-        e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("gratis.es", "otra", "2.2.2.2"))
+        g.confirm_free_import("www.Gratis.es", "1.1.1.1")
+        e = denied(lambda: g.authorize("gratis.es", "otra", "1.1.1.1"))
         assert e.detail == MSG_GRATIS_USADA and e.status_code == 403
-        # Con licencia no se gasta; sin poder comprobarla (503) tampoco.
+        # Desde otra IP no se gasta la prueba de esa web (el dominio no está acreditado).
+        assert g.authorize("gratis.es", "k", "2.2.2.2").free
+        g.release_free_import("gratis.es", "2.2.2.2")
+        assert free_rows() == [("gratis.es", "1.1.1.1", "used")], free_rows()
+
+        # Con licencia no se gasta; sin poder comprobarla (503) tampoco; sin dominio no hay.
         assert not LicenseGate(http_post=Stub(OK)).authorize("pagada.es", "k", "1.1.1.1").free
         assert denied(lambda: LicenseGate(http_post=Stub(Resp(500))).authorize("caida.es", "k", "1.1.1.1")).status_code == 503
         assert denied(lambda: LicenseGate(http_post=Stub(Resp(403))).authorize("mal.es", "k", "1.1.1.1")).status_code == 503
-        # Sin dominio no hay importación gratis.
-        assert denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("ip:3.3.3.3", "k", "3.3.3.3")).status_code == 403
-        assert free_rows() == [("gratis.es",)], free_rows()
-        # Ni vincula fichas.
+        assert denied(lambda: g.authorize("ip:3.3.3.3", "k", "3.3.3.3")).status_code == 403
+        assert free_rows() == [("gratis.es", "1.1.1.1", "used")], free_rows()
         conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
         assert conn.execute("SELECT COUNT(*) FROM mrg_license_places WHERE domain = 'gratis.es'").fetchone()[0] == 0
         conn.close()
 
-        # Concurrencia: diez peticiones a la vez del mismo dominio, solo una gratis.
+        # Tope por IP: inventarse dominios desde un servidor no da pruebas sin fin.
+        for i in range(FREE_PER_IP_30D):
+            assert g.authorize(f"falso{i}.es", "k", "5.5.5.5").free
+            g.confirm_free_import(f"falso{i}.es", "5.5.5.5")
+        e = denied(lambda: g.authorize("falso9.es", "k", "5.5.5.5"))
+        assert e.reason == "gratis_tope_ip" and e.detail == MSG_GRATIS_IP and e.status_code == 403
+        clock.t += 31 * 86400
+        assert g.authorize("falso9.es", "k", "5.5.5.5").free, "pasados 30 días vuelve a haber"
+        g.confirm_free_import("falso9.es", "5.5.5.5")
+        assert denied(lambda: g.authorize("falso0.es", "k", "5.5.5.5")).reason == "gratis_usada"
+    finally:
+        p.stop()
+
+
+def test_importacion_gratis_en_curso_y_abandonada():
+    p = entorno("enforce")
+    try:
+        clock = Clock()
+        g = LicenseGate(http_post=Stub(NO), clock=clock)
+        assert g.authorize("curso.es", "k", "1.1.1.1").free
+        # Otra petición mientras tanto: 409 (el plugin no la da por gastada), no 403.
+        e = denied(lambda: g.authorize("curso.es", "k", "1.1.1.1"))
+        assert e.status_code == 409 and e.detail == MSG_GRATIS_EN_CURSO and e.reason == "gratis_en_curso"
+        # Si no se pudo liberar (SQLite ocupada) o el proceso cayó: caduca y vuelve a estar libre.
+        with patch.object(LicenseGate, "_atomic", side_effect=GuardBusy("ocupado")):
+            g.release_free_import("curso.es", "1.1.1.1")
+        assert free_rows() == [("curso.es", "1.1.1.1", "pending")]
+        clock.t += FREE_PENDING_TTL + 1
+        assert g.authorize("curso.es", "k", "1.1.1.1").free
+        # Las pendientes abandonadas no cuentan para el tope de la IP.
+        for i in range(FREE_PER_IP_30D):
+            assert g.authorize(f"aband{i}.es", "k", "7.7.7.7").free
+        clock.t += FREE_PENDING_TTL + 1
+        assert g.authorize("aband9.es", "k", "7.7.7.7").free
+
+        # Concurrencia: diez peticiones a la vez de la misma web, solo una gratis.
         res = []
         def una():
             try:
-                res.append(LicenseGate(http_post=Stub(NO)).authorize("carrera.es", "k", "1.1.1.1").free)
-            except LicenseDenied:
-                res.append(False)
+                res.append(LicenseGate(http_post=Stub(NO), clock=clock).authorize("carrera.es", "k", "1.1.1.1").free)
+            except LicenseDenied as exc:
+                res.append(exc.decision.status_code)
         hilos = [threading.Thread(target=una) for _ in range(10)]
         [h.start() for h in hilos]
         [h.join() for h in hilos]
-        assert res.count(True) == 1, res
+        assert res.count(True) == 1 and res.count(409) == 9, res
     finally:
         p.stop()
 
@@ -435,7 +478,7 @@ def test_importacion_gratis_fallida_se_recupera():
             assert free_rows() == [], "la importación fallida no cuenta"
             r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 200, r.text
-            assert free_rows() == [("falla.es",)]
+            assert free_rows() == [("falla.es", "8.8.8.1", "used")], free_rows()
             r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA
     finally:

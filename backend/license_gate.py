@@ -10,10 +10,15 @@ Modos (variable MRG_LICENSE_MODE):
   si falla la propia comprobación (SQLite ocupada, error inesperado…): se anota «error_interno».
 - enforce: se bloquea lo que no tenga licencia válida. Un fallo interno da 503 con Retry-After.
 
-Importación gratis: un dominio sin licencia válida (no_license, caducada…) tiene UNA importación
-de prueba (tabla mrg_free_imports). Se reserva antes de importar y se libera si la importación falla,
-así que solo cuenta la que sale bien. Reinstalar el plugin no da otra: se cuenta aquí, no en la web.
-Las reseñas por importación ya las acota ImportRequest.max_reviews (6). En 'log' también se anota.
+Importación gratis: una web sin licencia válida (no_license, caducada…) tiene UNA importación de
+prueba, contada por (dominio, IP que llama) en la tabla mrg_free_imports. El dominio lo declara el
+cliente y no se puede acreditar sin licencia: con la IP, un tercero no gasta la prueba de otra web
+desde la suya, y reinstalar en el mismo servidor no da otra. Una IP tiene como máximo
+FREE_PER_IP_30D pruebas en 30 días, para que inventarse dominios no salga gratis (el gasto global ya
+lo acota AccessGuard). Va en dos fases: «pending» al pedirla y «used» solo si la importación sale
+bien; si falla se borra, y una «pending» con más de FREE_PENDING_TTL (proceso caído, borrado
+fallido) vuelve a estar libre. Las reseñas por importación ya las acota ImportRequest.max_reviews (6).
+En 'log' también se anota.
 
 Caché por dominio en la SQLite (tabla mrg_license_cache): válida 6 h, no válida 15 min. Si SupuHub
 no responde (red, timeout, 5xx o 429) se reutiliza el último resultado VÁLIDO si tiene menos de 72 h
@@ -67,6 +72,14 @@ MSG_DEMASIADAS_FICHAS = (
     "Si has cambiado de ficha, contacta con el soporte de SupuDigital (https://www.supudigital.es) para liberarla."
 )
 
+FREE_PER_IP_30D = 3
+FREE_PENDING_TTL = 15 * 60  # por encima del timeout del proveedor (Apify, 180 s)
+
+MSG_GRATIS_EN_CURSO = "Hay una importación gratis en curso para esta web. Reintenta en unos minutos."
+MSG_GRATIS_IP = (
+    "Desde este servidor ya se han hecho varias importaciones gratis de Reseñas Woo este mes. "
+    "Para importar reseñas, activa una licencia en Reseñas Woo > Licencia."
+)
 MSG_GRATIS_USADA = (
     "Esta web ya ha usado su importación gratis de Reseñas Woo. Para volver a importar reseñas y "
     "tener el refresco semanal, activa una licencia en Reseñas Woo > Licencia."
@@ -122,7 +135,7 @@ class Decision:
     source: str  # 'supuhub' | 'cache' | 'grace' | 'error' | 'off'
     status_code: int = 200  # código HTTP a devolver si se bloquea
     detail: str = ""  # mensaje para el plugin si se bloquea
-    free: bool = False  # pasa con la importación gratis del dominio (hay que liberarla si falla)
+    free: bool = False  # pasa con la importación gratis: hay que confirmarla si sale bien o liberarla
 
 
 class LicenseDenied(Exception):
@@ -333,27 +346,66 @@ class LicenseGate:
 
     # ------------------------------------------------------------------ importación gratis
 
-    def use_free_import(self, domain: str, place_key: str, ip: str) -> bool:
-        """Reserva la importación gratis del dominio (atómico). False si ya la usó."""
+    def use_free_import(self, domain: str, place_key: str, ip: str) -> str:
+        """Pide la importación gratis de (dominio, IP). Atómico.
+
+        Devuelve 'reserved' (queda «pending»: hay que confirmarla o liberarla), 'used', 'pending'
+        (otra en curso) o 'ip_cap' (la IP ya tuvo FREE_PER_IP_30D en 30 días).
+        """
         self._ensure_schema()
-        out = {"ok": False}
+        now = self.clock()
+        out = {}
 
         def fn(conn: sqlite3.Connection) -> None:
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO mrg_free_imports (domain, place_key, ip, used_at) VALUES (?, ?, ?, ?)",
-                (domain, place_key[:190], ip[:64], self.clock()),
+            row = conn.execute(
+                "SELECT status, reserved_at FROM mrg_free_imports WHERE domain = ? AND ip = ?", (domain, ip)
+            ).fetchone()
+            if row and row[0] == "used":
+                out["r"] = "used"
+                return
+            if row and now - float(row[1]) < FREE_PENDING_TTL:
+                out["r"] = "pending"
+                return
+            # Cuentan las usadas y las pendientes vivas de esa IP en 30 días (no las abandonadas).
+            n = int(conn.execute(
+                "SELECT COUNT(*) FROM mrg_free_imports WHERE ip = ? AND reserved_at > ? AND NOT (domain = ?)"
+                " AND (status = 'used' OR reserved_at > ?)",
+                (ip, now - 30 * 86400, domain, now - FREE_PENDING_TTL),
+            ).fetchone()[0])
+            if n >= FREE_PER_IP_30D:
+                out["r"] = "ip_cap"
+                return
+            conn.execute(
+                "INSERT INTO mrg_free_imports (domain, ip, place_key, status, reserved_at) VALUES (?, ?, ?, 'pending', ?)"
+                " ON CONFLICT(domain, ip) DO UPDATE SET place_key = excluded.place_key, status = 'pending',"
+                " reserved_at = excluded.reserved_at",
+                (domain, ip, place_key[:190], now),
             )
-            out["ok"] = cur.rowcount == 1
+            out["r"] = "reserved"
 
         self._atomic(fn)
-        return out["ok"]
+        return out["r"]
 
-    def release_free_import(self, domain: str) -> None:
-        """La importación gratis falló: el dominio la recupera. Nunca lanza."""
-        try:
-            self._atomic(lambda conn: conn.execute("DELETE FROM mrg_free_imports WHERE domain = ?", (self.normalize(domain),)))
-        except Exception:
-            log.warning("No se pudo liberar la importación gratis de %s", domain, exc_info=True)
+    def confirm_free_import(self, domain: str, ip: str) -> None:
+        """La importación gratis salió bien: queda usada. Nunca lanza (si no se guarda, caduca libre)."""
+        self._free_write("UPDATE mrg_free_imports SET status = 'used' WHERE domain = ? AND ip = ?", domain, ip, "confirmar")
+
+    def release_free_import(self, domain: str, ip: str) -> None:
+        """La importación gratis falló: la web la recupera. Nunca lanza (si no se borra, caduca libre)."""
+        self._free_write(
+            "DELETE FROM mrg_free_imports WHERE domain = ? AND ip = ? AND status = 'pending'", domain, ip, "liberar"
+        )
+
+    def _free_write(self, sql: str, domain: str, ip: str, what: str) -> None:
+        domain = self.normalize(domain)
+        for intento in range(WRITE_RETRIES):
+            try:
+                self._atomic(lambda conn: conn.execute(sql, (domain, ip)))
+                return
+            except Exception:
+                if intento + 1 < WRITE_RETRIES:
+                    time.sleep(0.05 * (intento + 1))
+        log.warning("No se pudo %s la importación gratis de %s (%s)", what, domain, ip, exc_info=True)
 
     # ------------------------------------------------------------------ entrada principal
 
@@ -379,8 +431,14 @@ class LicenseGate:
                     log.warning("LICENCIA: %s supera %s fichas (nueva: %s).", domain, self.max_places, place_key)
             elif verdict.valid is False and domain and not domain.startswith("ip:"):
                 # Sin licencia válida (veredicto de SupuHub, no un fallo): la importación gratis.
-                if self.use_free_import(domain, place_key, ip):
+                r = self.use_free_import(domain, place_key, ip)
+                if r == "reserved":
                     verdict = Decision(True, False, "importacion_gratis", verdict.source, free=True)
+                elif r == "pending":
+                    # 409 y no 403: el plugin solo da la gratis por gastada con un 403.
+                    verdict = Decision(False, False, "gratis_en_curso", verdict.source, 409, MSG_GRATIS_EN_CURSO)
+                elif r == "ip_cap":
+                    verdict = Decision(False, False, "gratis_tope_ip", verdict.source, 403, MSG_GRATIS_IP)
                 else:
                     verdict = Decision(False, False, "gratis_usada", verdict.source, 403, MSG_GRATIS_USADA)
         except Exception:
@@ -526,10 +584,12 @@ class LicenseGate:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS mrg_free_imports (
-                    domain TEXT PRIMARY KEY,
-                    place_key TEXT NOT NULL,
+                    domain TEXT NOT NULL,
                     ip TEXT NOT NULL,
-                    used_at REAL NOT NULL
+                    place_key TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    reserved_at REAL NOT NULL,
+                    PRIMARY KEY (domain, ip)
                 )
                 """
             )
@@ -548,6 +608,7 @@ class LicenseGate:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_access_kind_ts ON mrg_access_log (kind, ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_free_ip ON mrg_free_imports (ip, reserved_at)")
         finally:
             conn.close()
         self._schema_ok = True
