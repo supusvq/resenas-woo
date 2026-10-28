@@ -148,8 +148,15 @@ def import_reviews(payload: ImportRequest, request: Request):
         place = ReviewsCache.place_key(str(payload.maps_url))
         guard.admit(ip, site, place)
         # Licencia ANTES de servir caché o llamar a Apify: también se aplica a la caché.
-        LicenseGate().authorize(site, place, ip)
-        return service.import_reviews(payload, ip=ip)
+        gate = LicenseGate()
+        decision = gate.authorize(site, place, ip)
+        try:
+            return service.import_reviews(payload, ip=ip)
+        except Exception:
+            # Solo cuenta la importación gratis que sale bien.
+            if decision.free:
+                gate.release_free_import(site)
+            raise
     except LicenseDenied as exc:
         d = exc.decision
         headers = {"Retry-After": "300"} if d.status_code == 503 else None

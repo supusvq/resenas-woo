@@ -10,6 +10,11 @@ Modos (variable MRG_LICENSE_MODE):
   si falla la propia comprobación (SQLite ocupada, error inesperado…): se anota «error_interno».
 - enforce: se bloquea lo que no tenga licencia válida. Un fallo interno da 503 con Retry-After.
 
+Importación gratis: un dominio sin licencia válida (no_license, caducada…) tiene UNA importación
+de prueba (tabla mrg_free_imports). Se reserva antes de importar y se libera si la importación falla,
+así que solo cuenta la que sale bien. Reinstalar el plugin no da otra: se cuenta aquí, no en la web.
+Las reseñas por importación ya las acota ImportRequest.max_reviews (6). En 'log' también se anota.
+
 Caché por dominio en la SQLite (tabla mrg_license_cache): válida 6 h, no válida 15 min. Si SupuHub
 no responde (red, timeout, 5xx o 429) se reutiliza el último resultado VÁLIDO si tiene menos de 72 h
 («gracia»). Un 3xx/400/401/403 de SupuHub es un error de configuración: nunca se guarda como veredicto.
@@ -62,6 +67,11 @@ MSG_DEMASIADAS_FICHAS = (
     "Si has cambiado de ficha, contacta con el soporte de SupuDigital (https://www.supudigital.es) para liberarla."
 )
 
+MSG_GRATIS_USADA = (
+    "Esta web ya ha usado su importación gratis de Reseñas Woo. Para volver a importar reseñas y "
+    "tener el refresco semanal, activa una licencia en Reseñas Woo > Licencia."
+)
+
 MODES = ("off", "log", "enforce")
 
 # Negativos que no se pudieron guardar en SQLite: dominio -> checked_at del negativo.
@@ -112,6 +122,7 @@ class Decision:
     source: str  # 'supuhub' | 'cache' | 'grace' | 'error' | 'off'
     status_code: int = 200  # código HTTP a devolver si se bloquea
     detail: str = ""  # mensaje para el plugin si se bloquea
+    free: bool = False  # pasa con la importación gratis del dominio (hay que liberarla si falla)
 
 
 class LicenseDenied(Exception):
@@ -320,6 +331,30 @@ class LicenseGate:
         self._atomic(fn)
         return out["ok"]
 
+    # ------------------------------------------------------------------ importación gratis
+
+    def use_free_import(self, domain: str, place_key: str, ip: str) -> bool:
+        """Reserva la importación gratis del dominio (atómico). False si ya la usó."""
+        self._ensure_schema()
+        out = {"ok": False}
+
+        def fn(conn: sqlite3.Connection) -> None:
+            cur = conn.execute(
+                "INSERT OR IGNORE INTO mrg_free_imports (domain, place_key, ip, used_at) VALUES (?, ?, ?, ?)",
+                (domain, place_key[:190], ip[:64], self.clock()),
+            )
+            out["ok"] = cur.rowcount == 1
+
+        self._atomic(fn)
+        return out["ok"]
+
+    def release_free_import(self, domain: str) -> None:
+        """La importación gratis falló: el dominio la recupera. Nunca lanza."""
+        try:
+            self._atomic(lambda conn: conn.execute("DELETE FROM mrg_free_imports WHERE domain = ?", (self.normalize(domain),)))
+        except Exception:
+            log.warning("No se pudo liberar la importación gratis de %s", domain, exc_info=True)
+
     # ------------------------------------------------------------------ entrada principal
 
     def authorize(self, domain: str, place_key: str, ip: str) -> Decision:
@@ -342,6 +377,12 @@ class LicenseGate:
                         MSG_DEMASIADAS_FICHAS.format(n=self.max_places),
                     )
                     log.warning("LICENCIA: %s supera %s fichas (nueva: %s).", domain, self.max_places, place_key)
+            elif verdict.valid is False and domain and not domain.startswith("ip:"):
+                # Sin licencia válida (veredicto de SupuHub, no un fallo): la importación gratis.
+                if self.use_free_import(domain, place_key, ip):
+                    verdict = Decision(True, False, "importacion_gratis", verdict.source, free=True)
+                else:
+                    verdict = Decision(False, False, "gratis_usada", verdict.source, 403, MSG_GRATIS_USADA)
         except Exception:
             log.exception("LICENCIA: error interno con %s (modo %s)", domain, self.mode)
             verdict = self._unavailable("error_interno")
@@ -479,6 +520,16 @@ class LicenseGate:
                     first_seen REAL NOT NULL,
                     last_seen REAL NOT NULL,
                     PRIMARY KEY (domain, place_key)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS mrg_free_imports (
+                    domain TEXT PRIMARY KEY,
+                    place_key TEXT NOT NULL,
+                    ip TEXT NOT NULL,
+                    used_at REAL NOT NULL
                 )
                 """
             )

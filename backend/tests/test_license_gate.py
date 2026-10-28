@@ -20,7 +20,7 @@ import sqlite3  # noqa: E402
 import license_gate  # noqa: E402
 from access_guard import GuardBusy  # noqa: E402
 from license_gate import (  # noqa: E402
-    GRACE_TTL, INVALID_TTL, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
+    GRACE_TTL, INVALID_TTL, MSG_GRATIS_USADA, MSG_SIN_LICENCIA, VALID_TTL, LicenseDenied, LicenseGate, license_mode,
 )
 
 H = 3600
@@ -142,8 +142,10 @@ def test_enforce_bloquea_y_log_deja_pasar():
         d = LicenseGate(http_post=Stub(NO)).check("cliente.es")
         assert not d.allowed and d.valid is False and d.status_code == 403 and d.detail == MSG_SIN_LICENCIA
         assert d.reason == "no_license"
+        # La primera vez, la importación gratis; la segunda, bloqueada.
+        assert LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1").free
         e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1"))
-        assert e.status_code == 403
+        assert e.status_code == 403 and e.reason == "gratis_usada"
         # Sin site_url (clave ip:…) = sin licencia, sin preguntar a SupuHub.
         stub = Stub(OK)
         e = denied(lambda: LicenseGate(http_post=stub).authorize("ip:1.1.1.1", "k", "1.1.1.1"))
@@ -153,8 +155,9 @@ def test_enforce_bloquea_y_log_deja_pasar():
 
     p = entorno("log")
     try:
+        assert LicenseGate(http_post=Stub(NO)).authorize("cliente.es", "k", "1.1.1.1").free
         d = LicenseGate(http_post=Stub(NO)).authorize("cliente.es", "k", "1.1.1.1")
-        assert d.allowed and d.valid is False
+        assert d.allowed and d.valid is False and not d.free
         rows = log_rows()
         assert "mode=log allowed=1 would_block=1 valid=0" in rows[-1][2], rows
         # Una licencia no válida no vincula fichas, ni en modo log.
@@ -353,7 +356,9 @@ def test_endpoint():
             assert r.status_code == 200, r.text
         with patch.object(license_gate, "_requests_post", Stub(NO)):
             r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata.es"}, headers={"X-Real-IP": "9.9.9.8"})
-            assert r.status_code == 403 and r.json()["detail"] == MSG_SIN_LICENCIA, r.text
+            assert r.status_code == 200, r.text  # su importación gratis
+            r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata.es"}, headers={"X-Real-IP": "9.9.9.8"})
+            assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA, r.text
             r = c.post("/v1/import-reviews", json={"maps_url": body["maps_url"]}, headers={"X-Real-IP": "9.9.9.7"})
             assert r.status_code == 403
         with patch.object(license_gate, "_requests_post", Stub(Resp(403))):
@@ -362,12 +367,79 @@ def test_endpoint():
         # Modo log: la web sin licencia sigue funcionando y queda anotada.
         os.environ["MRG_LICENSE_MODE"] = "log"
         with patch.object(license_gate, "_requests_post", Stub(NO)):
-            r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata2.es"}, headers={"X-Real-IP": "9.9.9.5"})
-            assert r.status_code == 200, r.text
+            for _ in range(2):
+                r = c.post("/v1/import-reviews", json={**body, "site_url": "https://pirata2.es"}, headers={"X-Real-IP": "9.9.9.5"})
+                assert r.status_code == 200, r.text
         assert any(s == "pirata2.es" and "would_block=1" in o for s, _, o in log_rows())
     finally:
         p.stop()
 
+
+
+def free_rows():
+    conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+    try:
+        return conn.execute("SELECT domain FROM mrg_free_imports ORDER BY domain").fetchall()
+    finally:
+        conn.close()
+
+
+def test_importacion_gratis():
+    p = entorno("enforce")
+    try:
+        # Una por dominio, con el mismo criterio de dominio que la licencia (www, mayúsculas).
+        d = LicenseGate(http_post=Stub(NO)).authorize("www.Gratis.es", "k", "1.1.1.1")
+        assert d.allowed and d.free and d.reason == "importacion_gratis"
+        e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("gratis.es", "otra", "2.2.2.2"))
+        assert e.detail == MSG_GRATIS_USADA and e.status_code == 403
+        # Con licencia no se gasta; sin poder comprobarla (503) tampoco.
+        assert not LicenseGate(http_post=Stub(OK)).authorize("pagada.es", "k", "1.1.1.1").free
+        assert denied(lambda: LicenseGate(http_post=Stub(Resp(500))).authorize("caida.es", "k", "1.1.1.1")).status_code == 503
+        assert denied(lambda: LicenseGate(http_post=Stub(Resp(403))).authorize("mal.es", "k", "1.1.1.1")).status_code == 503
+        # Sin dominio no hay importación gratis.
+        assert denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("ip:3.3.3.3", "k", "3.3.3.3")).status_code == 403
+        assert free_rows() == [("gratis.es",)], free_rows()
+        # Ni vincula fichas.
+        conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+        assert conn.execute("SELECT COUNT(*) FROM mrg_license_places WHERE domain = 'gratis.es'").fetchone()[0] == 0
+        conn.close()
+
+        # Concurrencia: diez peticiones a la vez del mismo dominio, solo una gratis.
+        res = []
+        def una():
+            try:
+                res.append(LicenseGate(http_post=Stub(NO)).authorize("carrera.es", "k", "1.1.1.1").free)
+            except LicenseDenied:
+                res.append(False)
+        hilos = [threading.Thread(target=una) for _ in range(10)]
+        [h.start() for h in hilos]
+        [h.join() for h in hilos]
+        assert res.count(True) == 1, res
+    finally:
+        p.stop()
+
+
+def test_importacion_gratis_fallida_se_recupera():
+    import app as app_module
+    from fastapi.testclient import TestClient
+    from service import ReviewImportService
+
+    p = entorno("enforce")
+    try:
+        c = TestClient(app_module.app)
+        body = {"maps_url": "https://www.google.com/maps/place/negocio-fallo", "site_url": "https://www.falla.es"}
+        with patch.object(license_gate, "_requests_post", Stub(NO)):
+            with patch.object(ReviewImportService, "import_reviews", side_effect=RuntimeError("Apify caído")):
+                r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
+                assert r.status_code == 502, r.text
+            assert free_rows() == [], "la importación fallida no cuenta"
+            r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 200, r.text
+            assert free_rows() == [("falla.es",)]
+            r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA
+    finally:
+        p.stop()
 
 
 # ---------------------------------------------------------------- regresiones de la revisión de Codex
