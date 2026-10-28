@@ -155,14 +155,14 @@ def import_reviews(payload: ImportRequest, request: Request):
         except Exception:
             # Solo cuenta la importación gratis que sale bien.
             if decision.free:
-                gate.release_free_import(site, ip)
+                gate.release_free_import(site, ip, decision.free_token)
             raise
         if decision.free:
-            gate.confirm_free_import(site, ip)
+            gate.confirm_free_import(site, ip, decision.free_token)
         return result
     except LicenseDenied as exc:
         d = exc.decision
-        headers = {"Retry-After": "300"} if d.status_code in (409, 503) else None
+        headers = {"Retry-After": "300"} if d.status_code in (409, 503) else ({"Retry-After": "86400"} if d.status_code == 429 else None)
         raise HTTPException(status_code=d.status_code, detail=d.detail, headers=headers) from exc
     except LimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc), headers={"Retry-After": "3600"}) from exc

@@ -17,7 +17,9 @@ desde la suya, y reinstalar en el mismo servidor no da otra. Una IP tiene como m
 FREE_PER_IP_30D pruebas en 30 días, para que inventarse dominios no salga gratis (el gasto global ya
 lo acota AccessGuard). Va en dos fases: «pending» al pedirla y «used» solo si la importación sale
 bien; si falla se borra, y una «pending» con más de FREE_PENDING_TTL (proceso caído, borrado
-fallido) vuelve a estar libre. Las reseñas por importación ya las acota ImportRequest.max_reviews (6).
+fallido) vuelve a estar libre. Cada reserva lleva su token y solo con él se confirma o se libera: una
+importación que termina tarde no toca la reserva que otra petición hizo después. Solo «used» da 403
+(el plugin la da entonces por gastada); en curso es 409 y el tope de la IP es 429, ambos recuperables. Las reseñas por importación ya las acota ImportRequest.max_reviews (6).
 En 'log' también se anota.
 
 Caché por dominio en la SQLite (tabla mrg_license_cache): válida 6 h, no válida 15 min. Si SupuHub
@@ -46,6 +48,7 @@ Autoría: Juan Gallardo by SupuDigital (https://www.supudigital.es).
 import logging
 import os
 import sqlite3
+import secrets
 import threading
 import time
 from contextlib import contextmanager
@@ -78,7 +81,7 @@ FREE_PENDING_TTL = 15 * 60  # por encima del timeout del proveedor (Apify, 180 s
 MSG_GRATIS_EN_CURSO = "Hay una importación gratis en curso para esta web. Reintenta en unos minutos."
 MSG_GRATIS_IP = (
     "Desde este servidor ya se han hecho varias importaciones gratis de Reseñas Woo este mes. "
-    "Para importar reseñas, activa una licencia en Reseñas Woo > Licencia."
+    "Reintenta más adelante o activa una licencia en Reseñas Woo > Licencia."
 )
 MSG_GRATIS_USADA = (
     "Esta web ya ha usado su importación gratis de Reseñas Woo. Para volver a importar reseñas y "
@@ -136,6 +139,7 @@ class Decision:
     status_code: int = 200  # código HTTP a devolver si se bloquea
     detail: str = ""  # mensaje para el plugin si se bloquea
     free: bool = False  # pasa con la importación gratis: hay que confirmarla si sale bien o liberarla
+    free_token: str = ""  # identifica esa reserva al confirmarla o liberarla
 
 
 class LicenseDenied(Exception):
@@ -346,14 +350,16 @@ class LicenseGate:
 
     # ------------------------------------------------------------------ importación gratis
 
-    def use_free_import(self, domain: str, place_key: str, ip: str) -> str:
+    def use_free_import(self, domain: str, place_key: str, ip: str) -> tuple:
         """Pide la importación gratis de (dominio, IP). Atómico.
 
-        Devuelve 'reserved' (queda «pending»: hay que confirmarla o liberarla), 'used', 'pending'
-        (otra en curso) o 'ip_cap' (la IP ya tuvo FREE_PER_IP_30D en 30 días).
+        Devuelve (resultado, token): 'reserved' con el token de la reserva («pending»: hay que
+        confirmarla o liberarla con él), o 'used', 'pending' (otra en curso) o 'ip_cap' (la IP ya
+        tuvo FREE_PER_IP_30D en 30 días) con token ''.
         """
         self._ensure_schema()
         now = self.clock()
+        token = secrets.token_hex(16)
         out = {}
 
         def fn(conn: sqlite3.Connection) -> None:
@@ -376,31 +382,36 @@ class LicenseGate:
                 out["r"] = "ip_cap"
                 return
             conn.execute(
-                "INSERT INTO mrg_free_imports (domain, ip, place_key, status, reserved_at) VALUES (?, ?, ?, 'pending', ?)"
+                "INSERT INTO mrg_free_imports (domain, ip, place_key, status, reserved_at, token)"
+                " VALUES (?, ?, ?, 'pending', ?, ?)"
                 " ON CONFLICT(domain, ip) DO UPDATE SET place_key = excluded.place_key, status = 'pending',"
-                " reserved_at = excluded.reserved_at",
-                (domain, ip, place_key[:190], now),
+                " reserved_at = excluded.reserved_at, token = excluded.token",
+                (domain, ip, place_key[:190], now, token),
             )
             out["r"] = "reserved"
 
         self._atomic(fn)
-        return out["r"]
+        return (out["r"], token if out["r"] == "reserved" else "")
 
-    def confirm_free_import(self, domain: str, ip: str) -> None:
+    def confirm_free_import(self, domain: str, ip: str, token: str) -> None:
         """La importación gratis salió bien: queda usada. Nunca lanza (si no se guarda, caduca libre)."""
-        self._free_write("UPDATE mrg_free_imports SET status = 'used' WHERE domain = ? AND ip = ?", domain, ip, "confirmar")
-
-    def release_free_import(self, domain: str, ip: str) -> None:
-        """La importación gratis falló: la web la recupera. Nunca lanza (si no se borra, caduca libre)."""
         self._free_write(
-            "DELETE FROM mrg_free_imports WHERE domain = ? AND ip = ? AND status = 'pending'", domain, ip, "liberar"
+            "UPDATE mrg_free_imports SET status = 'used' WHERE domain = ? AND ip = ? AND token = ? AND status = 'pending'",
+            domain, ip, token, "confirmar",
         )
 
-    def _free_write(self, sql: str, domain: str, ip: str, what: str) -> None:
+    def release_free_import(self, domain: str, ip: str, token: str) -> None:
+        """La importación gratis falló: la web la recupera. Nunca lanza (si no se borra, caduca libre)."""
+        self._free_write(
+            "DELETE FROM mrg_free_imports WHERE domain = ? AND ip = ? AND token = ? AND status = 'pending'",
+            domain, ip, token, "liberar",
+        )
+
+    def _free_write(self, sql: str, domain: str, ip: str, token: str, what: str) -> None:
         domain = self.normalize(domain)
         for intento in range(WRITE_RETRIES):
             try:
-                self._atomic(lambda conn: conn.execute(sql, (domain, ip)))
+                self._atomic(lambda conn: conn.execute(sql, (domain, ip, token)))
                 return
             except Exception:
                 if intento + 1 < WRITE_RETRIES:
@@ -431,14 +442,15 @@ class LicenseGate:
                     log.warning("LICENCIA: %s supera %s fichas (nueva: %s).", domain, self.max_places, place_key)
             elif verdict.valid is False and domain and not domain.startswith("ip:"):
                 # Sin licencia válida (veredicto de SupuHub, no un fallo): la importación gratis.
-                r = self.use_free_import(domain, place_key, ip)
+                r, token = self.use_free_import(domain, place_key, ip)
                 if r == "reserved":
-                    verdict = Decision(True, False, "importacion_gratis", verdict.source, free=True)
+                    verdict = Decision(True, False, "importacion_gratis", verdict.source, free=True, free_token=token)
                 elif r == "pending":
                     # 409 y no 403: el plugin solo da la gratis por gastada con un 403.
                     verdict = Decision(False, False, "gratis_en_curso", verdict.source, 409, MSG_GRATIS_EN_CURSO)
                 elif r == "ip_cap":
-                    verdict = Decision(False, False, "gratis_tope_ip", verdict.source, 403, MSG_GRATIS_IP)
+                    # 429: el cupo de la IP se recupera; con 403 el plugin la daría por gastada.
+                    verdict = Decision(False, False, "gratis_tope_ip", verdict.source, 429, MSG_GRATIS_IP)
                 else:
                     verdict = Decision(False, False, "gratis_usada", verdict.source, 403, MSG_GRATIS_USADA)
         except Exception:
@@ -589,6 +601,7 @@ class LicenseGate:
                     place_key TEXT NOT NULL,
                     status TEXT NOT NULL,
                     reserved_at REAL NOT NULL,
+                    token TEXT NOT NULL,
                     PRIMARY KEY (domain, ip)
                 )
                 """

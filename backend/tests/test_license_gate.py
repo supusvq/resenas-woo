@@ -144,8 +144,9 @@ def test_enforce_bloquea_y_log_deja_pasar():
         assert d.reason == "no_license"
         # La primera vez, la importación gratis; la segunda, bloqueada.
         g = LicenseGate(http_post=Stub(NO))
-        assert g.authorize("otro.es", "k", "1.1.1.1").free
-        g.confirm_free_import("otro.es", "1.1.1.1")
+        d = g.authorize("otro.es", "k", "1.1.1.1")
+        assert d.free
+        g.confirm_free_import("otro.es", "1.1.1.1", d.free_token)
         e = denied(lambda: LicenseGate(http_post=Stub(NO)).authorize("otro.es", "k", "1.1.1.1"))
         assert e.status_code == 403 and e.reason == "gratis_usada"
         # Sin site_url (clave ip:…) = sin licencia, sin preguntar a SupuHub.
@@ -394,12 +395,13 @@ def test_importacion_gratis():
         # Una por (dominio, IP), con el mismo criterio de dominio que la licencia (www, mayúsculas).
         d = g.authorize("www.Gratis.es", "k", "1.1.1.1")
         assert d.allowed and d.free and d.reason == "importacion_gratis"
-        g.confirm_free_import("www.Gratis.es", "1.1.1.1")
+        g.confirm_free_import("www.Gratis.es", "1.1.1.1", d.free_token)
         e = denied(lambda: g.authorize("gratis.es", "otra", "1.1.1.1"))
         assert e.detail == MSG_GRATIS_USADA and e.status_code == 403
         # Desde otra IP no se gasta la prueba de esa web (el dominio no está acreditado).
-        assert g.authorize("gratis.es", "k", "2.2.2.2").free
-        g.release_free_import("gratis.es", "2.2.2.2")
+        d2 = g.authorize("gratis.es", "k", "2.2.2.2")
+        assert d2.free
+        g.release_free_import("gratis.es", "2.2.2.2", d2.free_token)
         assert free_rows() == [("gratis.es", "1.1.1.1", "used")], free_rows()
 
         # Con licencia no se gasta; sin poder comprobarla (503) tampoco; sin dominio no hay.
@@ -414,13 +416,16 @@ def test_importacion_gratis():
 
         # Tope por IP: inventarse dominios desde un servidor no da pruebas sin fin.
         for i in range(FREE_PER_IP_30D):
-            assert g.authorize(f"falso{i}.es", "k", "5.5.5.5").free
-            g.confirm_free_import(f"falso{i}.es", "5.5.5.5")
+            d = g.authorize(f"falso{i}.es", "k", "5.5.5.5")
+            assert d.free
+            g.confirm_free_import(f"falso{i}.es", "5.5.5.5", d.free_token)
         e = denied(lambda: g.authorize("falso9.es", "k", "5.5.5.5"))
-        assert e.reason == "gratis_tope_ip" and e.detail == MSG_GRATIS_IP and e.status_code == 403
+        # 429 y no 403: el cupo se recupera y el plugin no debe darla por gastada.
+        assert e.reason == "gratis_tope_ip" and e.detail == MSG_GRATIS_IP and e.status_code == 429
         clock.t += 31 * 86400
-        assert g.authorize("falso9.es", "k", "5.5.5.5").free, "pasados 30 días vuelve a haber"
-        g.confirm_free_import("falso9.es", "5.5.5.5")
+        d = g.authorize("falso9.es", "k", "5.5.5.5")
+        assert d.free, "pasados 30 días vuelve a haber"
+        g.confirm_free_import("falso9.es", "5.5.5.5", d.free_token)
         assert denied(lambda: g.authorize("falso0.es", "k", "5.5.5.5")).reason == "gratis_usada"
     finally:
         p.stop()
@@ -431,16 +436,25 @@ def test_importacion_gratis_en_curso_y_abandonada():
     try:
         clock = Clock()
         g = LicenseGate(http_post=Stub(NO), clock=clock)
-        assert g.authorize("curso.es", "k", "1.1.1.1").free
+        a = g.authorize("curso.es", "k", "1.1.1.1")
+        assert a.free
         # Otra petición mientras tanto: 409 (el plugin no la da por gastada), no 403.
         e = denied(lambda: g.authorize("curso.es", "k", "1.1.1.1"))
         assert e.status_code == 409 and e.detail == MSG_GRATIS_EN_CURSO and e.reason == "gratis_en_curso"
         # Si no se pudo liberar (SQLite ocupada) o el proceso cayó: caduca y vuelve a estar libre.
         with patch.object(LicenseGate, "_atomic", side_effect=GuardBusy("ocupado")):
-            g.release_free_import("curso.es", "1.1.1.1")
+            g.release_free_import("curso.es", "1.1.1.1", a.free_token)
         assert free_rows() == [("curso.es", "1.1.1.1", "pending")]
         clock.t += FREE_PENDING_TTL + 1
-        assert g.authorize("curso.es", "k", "1.1.1.1").free
+        b = g.authorize("curso.es", "k", "1.1.1.1")
+        assert b.free
+        # A termina tarde: ni su fallo libera la reserva de B ni su éxito la da por usada.
+        g.release_free_import("curso.es", "1.1.1.1", a.free_token)
+        g.confirm_free_import("curso.es", "1.1.1.1", a.free_token)
+        assert free_rows() == [("curso.es", "1.1.1.1", "pending")]
+        assert denied(lambda: g.authorize("curso.es", "k", "1.1.1.1")).status_code == 409
+        g.confirm_free_import("curso.es", "1.1.1.1", b.free_token)
+        assert free_rows() == [("curso.es", "1.1.1.1", "used")]
         # Las pendientes abandonadas no cuentan para el tope de la IP.
         for i in range(FREE_PER_IP_30D):
             assert g.authorize(f"aband{i}.es", "k", "7.7.7.7").free
