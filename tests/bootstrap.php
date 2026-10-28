@@ -41,6 +41,7 @@ function esc_url_raw($url) { return (string) $url; }
 function esc_js($text) { return addslashes((string) $text); }
 function sanitize_text_field($text) { return trim(strip_tags((string) $text)); }
 function wp_strip_all_tags($text) { return trim(strip_tags((string) $text)); }
+function sanitize_textarea_field($t) { return trim(strip_tags((string) $t)); }
 function sanitize_key($key) { return strtolower(preg_replace('/[^a-z0-9_\-]/i', '', (string) $key)); }
 function wp_unslash($value) { return $value; }
 function admin_url($path = '') { return 'https://cliente.es/wp-admin/' . $path; }
@@ -211,6 +212,21 @@ function wp_remote_post($url, $args = [])
 }
 function wp_remote_retrieve_response_code($response) { return is_array($response) ? $response['status'] : 0; }
 function wp_remote_retrieve_body($response) { return is_array($response) ? $response['body'] : ''; }
+
+/** Lo justo de $wpdb para ReviewRepository::upsert() y prune_place_reviews(). */
+class FakeWpdb
+{
+    public $prefix = 'wp_';
+    public $options = 'wp_options';
+    public function esc_like($text) { return $text; }
+    public $insert_result = 1;
+    public function prepare($query, ...$args) { return $query; }
+    public function get_var($query) { return null; }
+    public function get_col($query) { return []; }
+    public function query($query) { return 0; }
+    public function insert($table, $data) { return $this->insert_result; }
+    public function update($table, $data, $where) { return 1; }
+}
 
 /* Utilidades de prueba ---------------------------------------------- */
 

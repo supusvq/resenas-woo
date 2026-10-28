@@ -85,15 +85,27 @@ class ReviewSyncService
         $internal_place_id = !empty($result['place_id']) ? $result['place_id'] : $this->build_internal_place_id($maps_url);
         $added = 0;
         $updated = 0;
+        $failed = 0;
 
         foreach ($reviews as $review) {
             $formatted_review = $this->format_remote_review((array) $review, $internal_place_id);
+            $saved = $repo->upsert($formatted_review);
 
-            if ($repo->upsert($formatted_review)) {
+            if (null === $saved) {
+                $failed++;
+            } elseif ($saved) {
                 $added++;
             } else {
                 $updated++;
             }
+        }
+
+        if ($failed > 0) {
+            // Sin guardar no se gasta la gratis: el servicio devuelve la misma respuesta al reintentar.
+            return [
+                'added' => $added,
+                'error' => __('No se pudieron guardar las reseñas en la base de datos. Vuelve a intentarlo.', 'mis-resenas-de-google'),
+            ];
         }
 
         $repo->prune_place_reviews($internal_place_id, self::REMOTE_REVIEW_LIMIT);

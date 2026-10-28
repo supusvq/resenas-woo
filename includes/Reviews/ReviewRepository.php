@@ -15,6 +15,7 @@ class ReviewRepository
         $this->table = $wpdb->prefix . 'mrg_reviews';
     }
 
+    /** true si la añade, false si la actualiza, null si la base de datos no la guarda. */
     public function upsert(array $review)
     {
         global $wpdb;
@@ -35,14 +36,12 @@ class ReviewRepository
         ];
 
         if ($existing) {
-            $wpdb->update($this->table, $data, ['id' => (int) $existing]);
-            return false;
+            return false === $wpdb->update($this->table, $data, ['id' => (int) $existing]) ? null : false;
         }
 
         $data['created_at'] = current_time('mysql');
         $data['active'] = 1;
-        $wpdb->insert($this->table, $data);
-        return true;
+        return false === $wpdb->insert($this->table, $data) ? null : true;
     }
 
     public function add_manual(array $data)

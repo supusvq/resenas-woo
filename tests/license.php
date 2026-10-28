@@ -86,6 +86,19 @@ $r = (new ReviewSyncService())->sync();
 check('403 del servicio: llega a pedirlo', count($GLOBALS['requests']) === 4);
 check('403 del servicio: marca la gratis como usada', !License::has_free_import() && !License::can_import());
 check('403 del servicio: resultado de licencia con su mensaje', !empty($r['license_required']) && strpos($r['error'], 'importación gratis') !== false);
+
+// Importación correcta del servicio, pero la base de datos no guarda: la gratis no se gasta.
+delete_option(License::FREE_IMPORT_OPTION);
+$GLOBALS['wpdb'] = new FakeWpdb();
+$GLOBALS['wpdb']->insert_result = false;
+$ok = ['reviews' => [['review_id' => 'r1', 'author_name' => 'Ana', 'rating' => 5, 'text' => 'Bien']], 'place_id' => 'p1'];
+respond($ok);
+$r = (new ReviewSyncService())->sync();
+check('escritura fallida: error y la gratis sigue', isset($r['error']) && strpos($r['error'], 'base de datos') !== false && License::has_free_import());
+$GLOBALS['wpdb']->insert_result = 1;
+respond($ok);
+$r = (new ReviewSyncService())->sync();
+check('escritura correcta: importa y gasta la gratis', empty($r['error']) && 1 === $r['added'] && !License::has_free_import());
 $GLOBALS['next_response'] = null;
 $GLOBALS['requests'] = [];
 delete_option('mrg_settings');
