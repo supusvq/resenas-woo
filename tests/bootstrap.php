@@ -186,9 +186,20 @@ function deactivate_plugins($plugins, $silent = false, $network_wide = null)
 class TestError
 {
     private $message;
-    public function __construct($message) { $this->message = $message; }
+    private $data;
+    public function __construct($message, $data = '') { $this->message = $message; $this->data = $data; }
     public function get_error_message() { return $this->message; }
+    public function get_error_data() { return $this->data; }
 }
+// ScraperClient crea \WP_Error($code, $message, $data).
+class WP_Error extends TestError
+{
+    public function __construct($code = '', $message = '', $data = '') { parent::__construct($message, $data); }
+}
+function wp_safe_remote_post($url, $args = []) { return wp_remote_post($url, $args); }
+function untrailingslashit($s) { return rtrim((string) $s, '/\\'); }
+function absint($n) { return abs((int) $n); }
+function determine_locale() { return 'es_ES'; }
 function is_wp_error($thing) { return $thing instanceof TestError; }
 
 function wp_remote_post($url, $args = [])

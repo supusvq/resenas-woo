@@ -82,7 +82,7 @@ class ScraperClient
                 $message = __('No se pudo completar la importacion remota de resenas.', 'mis-resenas-de-google');
             }
 
-            return new \WP_Error('remote_import_failed', $message);
+            return new \WP_Error('remote_import_failed', $message, ['status' => $code]);
         }
 
         if (empty($data['reviews']) || !is_array($data['reviews'])) {

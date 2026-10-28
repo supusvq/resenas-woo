@@ -6,7 +6,8 @@
  * primer fallo (cada retraso cuenta desde el reintento anterior): el último cae ya
  * fuera de la ventana de 24 h de los límites diarios del servicio.
  *
- * Si falla porque no hay licencia válida NO se programan reintentos: no
+ * La importación gratis de prueba es solo a mano: sin licencia válida la tarea no
+ * importa. Si falla porque no hay licencia válida NO se programan reintentos: no
  * arreglarían nada y solo llenarían el cron. El evento semanal se mantiene para
  * que vuelva a funcionar en cuanto se active la licencia.
  */
@@ -64,7 +65,13 @@ class AutoSync
     public static function run($attempt = 0)
     {
         $attempt = (int) $attempt;
-        $result = (new ReviewSyncService())->sync();
+        $result = \MRG\License\License::is_valid()
+            ? (new ReviewSyncService())->sync()
+            : [
+                'added' => 0,
+                'error' => \MRG\License\License::import_blocked_message(),
+                'license_required' => true,
+            ];
 
         update_option('mrg_auto_sync_last', ['time' => time(), 'attempt' => $attempt, 'result' => $result], false);
 

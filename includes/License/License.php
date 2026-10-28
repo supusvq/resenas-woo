@@ -34,6 +34,9 @@ class License
     const HOOK = 'mrg_license_check';
     const OPTION = 'mrg_license';
     const INSTALL_OPTION = 'mrg_installation_id';
+    // Marca de la importación gratis ya usada. Como el installation_id, no se borra al
+    // desinstalar; quien manda de verdad es el servicio, que la cuenta por dominio.
+    const FREE_IMPORT_OPTION = 'mrg_free_import_used';
     const KEY_FORMAT = '/^[A-Z]{4,12}(-[A-Z0-9]{4}){3,5}$/';
 
     const TIMEOUT_SECONDS = 15;
@@ -156,11 +159,28 @@ class License
     }
 
     /**
-     * Alias con nombre de negocio: lo único que bloquea la licencia es importar.
+     * Lo único que bloquea la licencia es importar. Sin licencia válida queda una
+     * importación gratis de prueba, a mano.
      */
     public static function can_import()
     {
-        return (bool) apply_filters('mrg_license_can_import', self::is_valid());
+        return (bool) apply_filters('mrg_license_can_import', self::is_valid() || self::has_free_import());
+    }
+
+    /**
+     * Sin licencia válida, ¿queda la importación gratis de esta web?
+     */
+    public static function has_free_import()
+    {
+        return !self::is_valid() && !get_option(self::FREE_IMPORT_OPTION);
+    }
+
+    /**
+     * La importación gratis se ha usado (o el servicio dice que ya se usó).
+     */
+    public static function use_free_import()
+    {
+        update_option(self::FREE_IMPORT_OPTION, time(), false);
     }
 
     /**
@@ -168,9 +188,17 @@ class License
      */
     public static function import_blocked_message()
     {
+        if (self::has_free_import()) {
+            return sprintf(
+                /* translators: %s: URL de compra */
+                __('La importación semanal automática necesita una licencia válida. Sin licencia puedes hacer una importación gratis de prueba con «Importar reseñas ahora». Activa la licencia en Reseñas Woo > Licencia o consíguela en %s.', 'mis-resenas-de-google'),
+                self::BUY_URL
+            );
+        }
+
         return sprintf(
             /* translators: %s: URL de compra */
-            __('Para importar reseñas de Google necesitas una licencia válida. Actívala en Reseñas Woo > Licencia o consíguela en %s. Las reseñas guardadas se siguen mostrando y los emails se siguen enviando.', 'mis-resenas-de-google'),
+            __('Esta web ya ha usado su importación gratis de prueba. Para volver a importar reseñas de Google, y tener el refresco semanal, necesitas una licencia válida. Actívala en Reseñas Woo > Licencia o consíguela en %s. Las reseñas guardadas se siguen mostrando y los emails se siguen enviando.', 'mis-resenas-de-google'),
             self::BUY_URL
         );
     }

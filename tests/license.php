@@ -64,10 +64,29 @@ echo "\n1. Sin licencia\n";
 check('no hay clave', !License::has_key());
 check('no es válida', !License::is_valid());
 check('estado none', License::status_code() === 'none');
+check('sin licencia queda la importación gratis', License::has_free_import() && License::can_import());
+$r = (new ReviewSyncService())->sync();
+check('importación gratis: pasa la licencia (falla luego por falta de URL)', empty($r['license_required']) && strpos($r['error'], 'Google Maps') !== false);
+check('sin URL no sale ninguna petición', count($GLOBALS['requests']) === 0);
+check('fallar antes de importar no gasta la gratis', License::has_free_import());
+
+update_option('mrg_settings', ['maps_url' => 'https://maps.google.com/?cid=1', 'scraper_service_url' => 'https://scraper.test', 'remote_sync_consent' => 1]);
+network_error();
+$r = (new ReviewSyncService())->sync();
+check('error de red: no gasta la gratis', empty($r['license_required']) && License::has_free_import());
+respond(['detail' => 'Esta web ya ha usado su importación gratis de Reseñas Woo.'], 403);
+$r = (new ReviewSyncService())->sync();
+check('403 del servicio: llega a pedirlo', count($GLOBALS['requests']) === 2);
+check('403 del servicio: marca la gratis como usada', !License::has_free_import() && !License::can_import());
+check('403 del servicio: resultado de licencia con su mensaje', !empty($r['license_required']) && strpos($r['error'], 'importación gratis') !== false);
+$GLOBALS['next_response'] = null;
+$GLOBALS['requests'] = [];
+delete_option('mrg_settings');
+
 $r = (new ReviewSyncService())->sync();
 check('sync bloqueada sin licencia', !empty($r['license_required']) && isset($r['error']));
 check('mensaje con enlace de compra', strpos($r['error'], License::BUY_URL) !== false);
-check('sin licencia no sale ninguna petición', count($GLOBALS['requests']) === 0);
+check('usada la gratis no sale ninguna petición', count($GLOBALS['requests']) === 0);
 
 // ---------------------------------------------------------------------
 echo "\n2. Activación rechazada\n";
@@ -195,6 +214,12 @@ $saved = $GLOBALS['options'][License::OPTION];
 delete_option(License::OPTION);
 $r = AutoSync::run(0);
 check('sin licencia: resultado marcado', !empty($r['license_required']));
+delete_option(License::FREE_IMPORT_OPTION);
+$GLOBALS['requests'] = [];
+$r = AutoSync::run(0);
+check('la tarea semanal no gasta la importación gratis', !empty($r['license_required']) && License::has_free_import() && count($GLOBALS['requests']) === 0);
+check('y su mensaje lo explica', strpos($r['error'], 'importación gratis de prueba') !== false);
+License::use_free_import();
 check('sin licencia: NO programa reintentos', cron_count(AutoSync::RETRY_HOOK) === 0);
 check('sin licencia: guarda el último resultado', !empty(get_option('mrg_auto_sync_last')['result']['license_required']));
 $GLOBALS['options'][License::OPTION] = $saved;

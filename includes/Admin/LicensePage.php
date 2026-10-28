@@ -170,7 +170,7 @@ class LicensePage
         $page = sanitize_key(wp_unslash((string) $_GET['page']));
         if (self::SLUG !== $page && !License::is_valid()) {
             echo '<div class="notice notice-warning"><p>'
-                . esc_html__('Sin licencia válida no se importan reseñas de Google. Las reseñas guardadas se siguen mostrando y los emails se siguen enviando.', 'mis-resenas-de-google')
+                . esc_html__('Sin licencia válida solo hay una importación gratis de prueba de reseñas de Google, sin refresco semanal. Las reseñas guardadas se siguen mostrando y los emails se siguen enviando.', 'mis-resenas-de-google')
                 . ' ';
             printf(
                 '<a href="%s">%s</a> · <a href="%s" target="_blank" rel="noopener">%s</a>',

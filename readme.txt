@@ -4,7 +4,7 @@ Tags: google reviews, woocommerce, reviews, customer feedback, testimonials
 Requires at least: 6.0
 Tested up to: 6.5
 Requires PHP: 7.4
-Stable tag: 3.0.1
+Stable tag: 3.1.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -28,7 +28,7 @@ This plugin can connect to an external review import service. The site owner mus
 The plugin sends only the Google Maps URL, the configured review limit, the site language, the site URL, and an optional internal site token when an import is manually triggered by an administrator.
 
 ### Licencia (SupuHub)
-Importar reseñas de Google (botón manual y tarea semanal) y recibir actualizaciones necesita una licencia de SupuDigital (49 €/año, 15 días de prueba, 1 web). Sin licencia, las reseñas guardadas se siguen mostrando y los emails de petición de reseña se siguen enviando.
+Importar reseñas de Google (botón manual y tarea semanal) y recibir actualizaciones necesita una licencia de SupuDigital (49 €/año, 15 días de prueba, 1 web). Sin licencia, cada web tiene una importación gratis de prueba hecha a mano; las reseñas guardadas se siguen mostrando y los emails de petición de reseña se siguen enviando.
 Para activar y revalidar la licencia (cada 12 h) el plugin envía a api.supudigital.es la clave (en cabecera), un identificador anónimo de la instalación, la URL de la web y las versiones del plugin y de WordPress.
 
 == Installation ==
@@ -66,6 +66,10 @@ You can configure a delay in days. If the delay is 0, the plugin waits 5 minutes
 4. Frontend reviews widget with spotlight layout.
 
 == Changelog ==
+
+= 3.1.0 =
+* Versión gratis: sin licencia, cada web puede hacer una importación de reseñas de prueba a mano. El servicio la cuenta por dominio, así que reinstalar no da otra.
+* La importación semanal automática sigue siendo de la licencia.
 
 = 3.0.1 =
 * Botón «Comprar licencia» con el enlace de pago definitivo.

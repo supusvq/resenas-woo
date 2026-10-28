@@ -386,10 +386,23 @@ class Settings
             echo '<p style="margin:0 0 10px 0;"><strong>' . esc_html__('Ultima importacion:', 'mis-resenas-de-google') . '</strong> ' . esc_html__('Nunca sincronizado', 'mis-resenas-de-google') . '</p>';
         }
 
-        // Importar desde Google exige licencia válida de SupuHub.
+        // Importar desde Google exige licencia válida de SupuHub, salvo la importación gratis.
+        if (\MRG\License\License::has_free_import()) {
+            echo '<div style="background:#e7f5fe; padding:10px; border-left:4px solid #2271b1; margin-bottom:15px; border-radius:3px;"><p style="margin:0; color:#333;">'
+                . esc_html__('Sin licencia tienes una importación gratis de prueba. Después, importar reseñas y el refresco semanal necesitan una licencia.', 'mis-resenas-de-google') . ' ';
+            printf(
+                '<a href="%s">%s</a> · <a href="%s" target="_blank" rel="noopener">%s</a>',
+                esc_url(admin_url('admin.php?page=mrg-license')),
+                esc_html__('Activar licencia', 'mis-resenas-de-google'),
+                esc_url(\MRG\License\License::BUY_URL),
+                esc_html__('Comprar', 'mis-resenas-de-google')
+            );
+            echo '</p></div>';
+        }
+
         if (!\MRG\License\License::can_import()) {
             echo '<div style="background:#fff3cd; padding:10px; border-left:4px solid #ffc107; margin-bottom:15px; border-radius:3px;"><p style="margin:0; color:#333;">'
-                . esc_html__('Importar reseñas de Google necesita una licencia válida.', 'mis-resenas-de-google') . ' ';
+                . esc_html__('Esta web ya ha usado su importación gratis de prueba: para volver a importar reseñas de Google necesitas una licencia válida.', 'mis-resenas-de-google') . ' ';
             printf(
                 '<a href="%s">%s</a> · <a href="%s" target="_blank" rel="noopener">%s</a>',
                 esc_url(admin_url('admin.php?page=mrg-license')),

@@ -14,8 +14,8 @@ class ReviewSyncService
     public function sync()
     {
         // Importar desde Google es lo único que exige licencia de SupuHub. Se
-        // comprueba antes de leer ajustes o llamar al servicio: sin licencia no
-        // sale ninguna petición.
+        // comprueba antes de leer ajustes o llamar al servicio: sin licencia, y
+        // usada ya la importación gratis, no sale ninguna petición.
         if (!\MRG\License\License::can_import()) {
             return [
                 'added' => 0,
@@ -23,6 +23,7 @@ class ReviewSyncService
                 'license_required' => true,
             ];
         }
+        $free = !\MRG\License\License::is_valid();
 
         $settings = get_option('mrg_settings', []);
         $maps_url = esc_url_raw($settings['maps_url'] ?? '');
@@ -55,6 +56,17 @@ class ReviewSyncService
         $result = $client->import_reviews($maps_url, self::REMOTE_REVIEW_LIMIT);
 
         if (is_wp_error($result)) {
+            $data = $result->get_error_data();
+            if ($free && is_array($data) && 403 === ($data['status'] ?? 0)) {
+                // El servicio cuenta la importación gratis por dominio: ya se usó.
+                \MRG\License\License::use_free_import();
+                return [
+                    'added' => 0,
+                    'error' => $result->get_error_message(),
+                    'license_required' => true,
+                ];
+            }
+
             return [
                 'added' => 0,
                 'error' => sprintf(__('Error del servicio remoto: %s', 'mis-resenas-de-google'), $result->get_error_message()),
@@ -109,6 +121,10 @@ class ReviewSyncService
 
         update_option('mrg_settings', $settings);
         $this->clear_review_transients();
+
+        if ($free) {
+            \MRG\License\License::use_free_import();
+        }
 
         return [
             'added' => $added,

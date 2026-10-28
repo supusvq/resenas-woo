@@ -11,6 +11,7 @@ supuhub:
   update_uri: https://api.supudigital.es/products/resenaswoo
 
   free_features:
+    - una_importacion_gratis      # a mano; el servicio la cuenta por dominio (mrg_free_imports)
     - mostrar_resenas_guardadas
     - emails_peticion_resena
     - administracion_y_datos
@@ -31,7 +32,8 @@ supuhub:
 |---|---|---|---|---|
 | Mostrar reseñas guardadas | Sí | Sí | Sí | Sí |
 | Emails de petición de reseña | Sí | Sí | Sí | Sí |
-| Importar de Google (manual y semanal) | No | Sí | Sí | No |
+| Importar de Google a mano | Una vez (prueba gratis) | Sí | Sí | Una vez si no la usó |
+| Importación semanal automática | No | Sí | Sí | No |
 | Actualizaciones | No | Sí | Sí | No |
 | Acceso a datos y ajustes | Sí | Sí | Sí | Sí |
 
