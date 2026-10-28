@@ -150,10 +150,11 @@ def import_reviews(payload: ImportRequest, request: Request):
         guard.admit(ip, site, place)
         # Licencia ANTES de servir caché o llamar a Apify: también se aplica a la caché.
         gate = LicenseGate()
-        decision = gate.authorize(site, place, ip, LicenseGate.auth_fingerprint(payload.site_token))
+        auth = LicenseGate.auth_fingerprint(payload.site_token)
+        decision = gate.authorize(site, place, ip, auth)
         if decision.replay:
-            # Con credencial de tenant, la misma comprobación que el flujo normal (revocada, otra URL).
-            if payload.site_token and not TenantStore().authenticate(str(payload.site_url), str(payload.site_token)):
+            # Si la importación usó el tenant de GBP, la misma comprobación que el flujo normal.
+            if decision.replay_tenant and not TenantStore().authenticate(str(payload.site_url), str(payload.site_token)):
                 raise ValueError("Site token no valido para esta web.")
             return ImportResponse(**json.loads(decision.replay))
         try:
@@ -164,7 +165,9 @@ def import_reviews(payload: ImportRequest, request: Request):
                 gate.release_free_import(site, ip, decision.free_token)
             raise
         if decision.free:
-            gate.confirm_free_import(site, ip, decision.free_token, result.model_dump_json())
+            gate.confirm_free_import(
+                site, ip, decision.free_token, result.model_dump_json(), auth if service.uses_tenant(payload) else ""
+            )
         return result
     except LicenseDenied as exc:
         d = exc.decision

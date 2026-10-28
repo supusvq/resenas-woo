@@ -73,11 +73,12 @@ class ReviewImportService:
             log.warning("No se pudo guardar la caché de %s", key, exc_info=True)
         return result
 
-    def _build_tenant_provider(self, payload: ImportRequest):
-        if self.provider_name != "google_business_profile":
-            return None
+    def uses_tenant(self, payload: ImportRequest) -> bool:
+        """Si la petición va por el tenant de Google Business Profile (y se autentica con site_token)."""
+        return self.provider_name == "google_business_profile" and bool(payload.site_url and payload.site_token)
 
-        if not payload.site_url or not payload.site_token:
+    def _build_tenant_provider(self, payload: ImportRequest):
+        if not self.uses_tenant(payload):
             return None
 
         site = TenantStore().authenticate(str(payload.site_url), str(payload.site_token))

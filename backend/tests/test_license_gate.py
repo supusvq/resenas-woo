@@ -504,29 +504,36 @@ def test_importacion_gratis_fallida_se_recupera():
             with patch.object(ReviewImportService, "import_reviews", side_effect=AssertionError("no debe importar")):
                 r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 200 and r.json() == primera, r.text
-            # Con credencial de tenant: se autentica como en el flujo normal (token revocado u otra URL: 400).
+            # Sin tenant (Apify, caché) el reintento no pide credencial, como la importación original:
+            # con un site_token cualquiera o sin él, la misma respuesta.
+            with patch.object(ReviewImportService, "import_reviews", side_effect=AssertionError("no debe importar")):
+                for extra in ({"site_token": "obsoleto"}, {}):
+                    r = c.post("/v1/import-reviews", json={**body, **extra}, headers={"X-Real-IP": "8.8.8.1"})
+                    assert r.status_code == 200 and r.json() == primera, r.text
+
+            # Con tenant de GBP: el reintento exige la misma credencial y vuelve a autenticarla.
+            from schemas import ImportResponse
             from tenant_store import TenantStore
-            tenant = TenantStore().register_site("https://www.falla.es/")
-            b2 = {**body, "maps_url": "https://www.google.com/maps/place/negocio-tenant", "site_url": "https://www.falla.es/"}
-            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
-            conn.execute("DELETE FROM mrg_free_imports")
-            conn.commit()
-            conn.close()
-            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
-            assert r.status_code == 200, r.text
-            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
-            assert r.status_code == 200, "reintento con la credencial válida"
-            r = c.post("/v1/import-reviews", json={**b2, "site_url": "https://www.falla.es/otra/", "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
-            assert r.status_code == 400, r.text
-            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
-            conn.execute("UPDATE mrg_sites SET site_token = 'rotado'")
-            conn.commit()
-            conn.close()
-            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
-            assert r.status_code == 400, r.text
-            # Con otra credencial (site_token) no se devuelve: no se salta la autenticación del tenant.
-            r = c.post("/v1/import-reviews", json={**body, "site_token": "otro"}, headers={"X-Real-IP": "8.8.8.1"})
-            assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA, r.text
+            tenant = TenantStore().register_site("https://www.tenant.es/")
+            tb = {"maps_url": "https://www.google.com/maps/place/negocio-tenant", "site_url": "https://www.tenant.es/",
+                  "site_token": tenant["site_token"]}
+            fija = ImportResponse(place_id="t1", place_name="Tenant", review_target_url="https://g.page/t", reviews=[])
+            with patch.object(ReviewImportService, "uses_tenant", return_value=True), \
+                    patch.object(ReviewImportService, "import_reviews", return_value=fija):
+                h = {"X-Real-IP": "8.8.8.2"}
+                assert c.post("/v1/import-reviews", json=tb, headers=h).status_code == 200
+                r = c.post("/v1/import-reviews", json=tb, headers=h)
+                assert r.status_code == 200 and r.json()["place_id"] == "t1", "reintento con la credencial válida"
+                r = c.post("/v1/import-reviews", json={k: v for k, v in tb.items() if k != "site_token"}, headers=h)
+                assert r.status_code == 403, "sin la credencial no se devuelve"
+                r = c.post("/v1/import-reviews", json={**tb, "site_url": "https://www.tenant.es/otra/"}, headers=h)
+                assert r.status_code == 400, "URL de otro tenant del mismo dominio"
+                conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+                conn.execute("UPDATE mrg_sites SET site_token = 'rotado'")
+                conn.commit()
+                conn.close()
+                assert c.post("/v1/import-reviews", json=tb, headers=h).status_code == 400, "credencial revocada"
+
             # Otra ficha, u otra vez pasadas 24 h: 403.
             otra = {**body, "maps_url": "https://www.google.com/maps/place/otra-ficha"}
             r = c.post("/v1/import-reviews", json=otra, headers={"X-Real-IP": "8.8.8.1"})
