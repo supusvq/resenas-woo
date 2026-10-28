@@ -504,6 +504,26 @@ def test_importacion_gratis_fallida_se_recupera():
             with patch.object(ReviewImportService, "import_reviews", side_effect=AssertionError("no debe importar")):
                 r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 200 and r.json() == primera, r.text
+            # Con credencial de tenant: se autentica como en el flujo normal (token revocado u otra URL: 400).
+            from tenant_store import TenantStore
+            tenant = TenantStore().register_site("https://www.falla.es/")
+            b2 = {**body, "maps_url": "https://www.google.com/maps/place/negocio-tenant", "site_url": "https://www.falla.es/"}
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+            conn.execute("DELETE FROM mrg_free_imports")
+            conn.commit()
+            conn.close()
+            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 200, r.text
+            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 200, "reintento con la credencial válida"
+            r = c.post("/v1/import-reviews", json={**b2, "site_url": "https://www.falla.es/otra/", "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 400, r.text
+            conn = sqlite3.connect(os.environ["MRG_SAAS_DB_PATH"])
+            conn.execute("UPDATE mrg_sites SET site_token = 'rotado'")
+            conn.commit()
+            conn.close()
+            r = c.post("/v1/import-reviews", json={**b2, "site_token": tenant["site_token"]}, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 400, r.text
             # Con otra credencial (site_token) no se devuelve: no se salta la autenticación del tenant.
             r = c.post("/v1/import-reviews", json={**body, "site_token": "otro"}, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA, r.text

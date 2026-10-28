@@ -152,6 +152,9 @@ def import_reviews(payload: ImportRequest, request: Request):
         gate = LicenseGate()
         decision = gate.authorize(site, place, ip, LicenseGate.auth_fingerprint(payload.site_token))
         if decision.replay:
+            # Con credencial de tenant, la misma comprobación que el flujo normal (revocada, otra URL).
+            if payload.site_token and not TenantStore().authenticate(str(payload.site_url), str(payload.site_token)):
+                raise ValueError("Site token no valido para esta web.")
             return ImportResponse(**json.loads(decision.replay))
         try:
             result = service.import_reviews(payload, ip=ip)
