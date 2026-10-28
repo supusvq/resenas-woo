@@ -504,6 +504,9 @@ def test_importacion_gratis_fallida_se_recupera():
             with patch.object(ReviewImportService, "import_reviews", side_effect=AssertionError("no debe importar")):
                 r = c.post("/v1/import-reviews", json=body, headers={"X-Real-IP": "8.8.8.1"})
             assert r.status_code == 200 and r.json() == primera, r.text
+            # Con otra credencial (site_token) no se devuelve: no se salta la autenticación del tenant.
+            r = c.post("/v1/import-reviews", json={**body, "site_token": "otro"}, headers={"X-Real-IP": "8.8.8.1"})
+            assert r.status_code == 403 and r.json()["detail"] == MSG_GRATIS_USADA, r.text
             # Otra ficha, u otra vez pasadas 24 h: 403.
             otra = {**body, "maps_url": "https://www.google.com/maps/place/otra-ficha"}
             r = c.post("/v1/import-reviews", json=otra, headers={"X-Real-IP": "8.8.8.1"})

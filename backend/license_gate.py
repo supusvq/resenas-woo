@@ -22,7 +22,9 @@ importación que termina tarde no toca la reserva que otra petición hizo despu�
 (el plugin la da entonces por gastada); en curso es 409 y el tope de la IP es 429, ambos recuperables.
 Al confirmarla se guarda la respuesta: si el plugin no la recibió (timeout, red), durante
 FREE_RETRY_TTL la misma web, desde la misma IP y para la misma ficha, recibe esa misma respuesta en
-vez de un 403 (en 'enforce'; en 'log' no hace falta porque nunca se bloquea). Las reseñas por importación ya las acota ImportRequest.max_reviews (6).
+vez de un 403 (en 'enforce'; en 'log' no hace falta porque nunca se bloquea). Solo si llega con la
+misma credencial (huella del site_token de Google Business Profile, o ninguna): el reintento no se
+salta la autenticación del tenant que hace ReviewImportService. Las reseñas por importación ya las acota ImportRequest.max_reviews (6).
 En 'log' también se anota.
 
 Caché por dominio en la SQLite (tabla mrg_license_cache): válida 6 h, no válida 15 min. Si SupuHub
@@ -48,6 +50,7 @@ Orden y concurrencia:
 
 Autoría: Juan Gallardo by SupuDigital (https://www.supudigital.es).
 """
+import hashlib
 import logging
 import os
 import sqlite3
@@ -355,7 +358,12 @@ class LicenseGate:
 
     # ------------------------------------------------------------------ importación gratis
 
-    def use_free_import(self, domain: str, place_key: str, ip: str) -> tuple:
+    @staticmethod
+    def auth_fingerprint(site_token: Optional[str]) -> str:
+        """Huella de la credencial con la que se pide (el site_token no se guarda en claro)."""
+        return hashlib.sha256(str(site_token or "").encode("utf-8")).hexdigest() if site_token else ""
+
+    def use_free_import(self, domain: str, place_key: str, ip: str, auth: str = "") -> tuple:
         """Pide la importación gratis de (dominio, IP). Atómico.
 
         Devuelve (resultado, dato): 'reserved' con el token de la reserva («pending»: hay que
@@ -370,11 +378,11 @@ class LicenseGate:
 
         def fn(conn: sqlite3.Connection) -> None:
             row = conn.execute(
-                "SELECT status, reserved_at, place_key, result_json FROM mrg_free_imports WHERE domain = ? AND ip = ?",
+                "SELECT status, reserved_at, place_key, result_json, auth FROM mrg_free_imports WHERE domain = ? AND ip = ?",
                 (domain, ip),
             ).fetchone()
             if row and row[0] == "used":
-                if row[2] == place_key[:190] and row[3] and now - float(row[1]) < FREE_RETRY_TTL:
+                if row[2] == place_key[:190] and row[3] and row[4] == auth and now - float(row[1]) < FREE_RETRY_TTL:
                     out["r"], out["d"] = "retry", row[3]
                 else:
                     out["r"] = "used"
@@ -392,11 +400,11 @@ class LicenseGate:
                 out["r"] = "ip_cap"
                 return
             conn.execute(
-                "INSERT INTO mrg_free_imports (domain, ip, place_key, status, reserved_at, token)"
-                " VALUES (?, ?, ?, 'pending', ?, ?)"
+                "INSERT INTO mrg_free_imports (domain, ip, place_key, status, reserved_at, token, auth)"
+                " VALUES (?, ?, ?, 'pending', ?, ?, ?)"
                 " ON CONFLICT(domain, ip) DO UPDATE SET place_key = excluded.place_key, status = 'pending',"
-                " reserved_at = excluded.reserved_at, token = excluded.token",
-                (domain, ip, place_key[:190], now, token),
+                " reserved_at = excluded.reserved_at, token = excluded.token, auth = excluded.auth",
+                (domain, ip, place_key[:190], now, token, auth),
             )
             out["r"] = "reserved"
 
@@ -433,7 +441,7 @@ class LicenseGate:
 
     # ------------------------------------------------------------------ entrada principal
 
-    def authorize(self, domain: str, place_key: str, ip: str) -> Decision:
+    def authorize(self, domain: str, place_key: str, ip: str, auth: str = "") -> Decision:
         """Licencia + límite de fichas, con registro. Lanza LicenseDenied si hay que bloquear.
 
         En 'off' y 'log' nunca lanza nada. En 'enforce' un error interno es un 503, nunca un 500.
@@ -455,7 +463,7 @@ class LicenseGate:
                     log.warning("LICENCIA: %s supera %s fichas (nueva: %s).", domain, self.max_places, place_key)
             elif verdict.valid is False and domain and not domain.startswith("ip:"):
                 # Sin licencia válida (veredicto de SupuHub, no un fallo): la importación gratis.
-                r, dato = self.use_free_import(domain, place_key, ip)
+                r, dato = self.use_free_import(domain, place_key, ip, auth)
                 if r == "reserved":
                     verdict = Decision(True, False, "importacion_gratis", verdict.source, free=True, free_token=dato)
                 elif r == "retry" and self.mode == "enforce":
@@ -619,6 +627,7 @@ class LicenseGate:
                     reserved_at REAL NOT NULL,
                     token TEXT NOT NULL,
                     result_json TEXT NOT NULL DEFAULT '',
+                    auth TEXT NOT NULL DEFAULT '',
                     PRIMARY KEY (domain, ip)
                 )
                 """

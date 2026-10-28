@@ -150,7 +150,7 @@ def import_reviews(payload: ImportRequest, request: Request):
         guard.admit(ip, site, place)
         # Licencia ANTES de servir caché o llamar a Apify: también se aplica a la caché.
         gate = LicenseGate()
-        decision = gate.authorize(site, place, ip)
+        decision = gate.authorize(site, place, ip, LicenseGate.auth_fingerprint(payload.site_token))
         if decision.replay:
             return ImportResponse(**json.loads(decision.replay))
         try:
