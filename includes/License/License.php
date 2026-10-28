@@ -177,10 +177,11 @@ class License
 
     /**
      * La importación gratis se ha usado (o el servicio dice que ya se usó).
+     * Devuelve si la marca quedó guardada.
      */
     public static function use_free_import()
     {
-        update_option(self::FREE_IMPORT_OPTION, time(), false);
+        return update_option(self::FREE_IMPORT_OPTION, time(), false) || (bool) get_option(self::FREE_IMPORT_OPTION);
     }
 
     /**

@@ -140,8 +140,15 @@ class ReviewSyncService
         }
         $this->clear_review_transients();
 
-        if ($free) {
-            \MRG\License\License::use_free_import();
+        if ($free && !\MRG\License\License::use_free_import()) {
+            // Las reseñas están guardadas, pero esta web seguiría ofreciendo la gratis.
+            return [
+                'added' => $added,
+                'updated' => $updated,
+                'total_synced' => count($reviews),
+                'timestamp' => $current_datetime,
+                'error' => __('Las reseñas se han importado, pero no se pudo registrar que esta web ya usó su importación gratis.', 'mis-resenas-de-google'),
+            ];
         }
 
         return [
